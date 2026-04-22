@@ -31,6 +31,19 @@ A powerful, local-first AI tool for automating the scanlation process: Detection
 -   Process entire chapters in parallel
 -   Configurable worker threads (1-16)
 
+## 🧠 AI Model Reference
+
+The tool uses several specialized AI models. These are **auto-downloaded** on first use, or can be managed via **Settings > Manage AI Models**.
+
+| Task | Default/Recommended Model | Source | Size |
+| :--- | :--- | :--- | :--- |
+| **Detection** | `comic-speech-bubble-detector.pt` | YOLOv8m (Specialized) | ~50 MB |
+| **OCR (JA)** | `manga-ocr` | kha-white (Transformer) | ~444 MB |
+| **OCR (Multi)** | `RapidOCR` | PaddleOCR (ONNX) | ~10 MB |
+| **Inpainting** | `LaMa` | AI Masked Inpainting | ~200 MB |
+| **Translation** | `NLLB-200` | Meta (High Quality Offline) | ~2.3 GB |
+| **Translation** | `OPUS-MT` | Helsinki-NLP (Fast Offline) | ~300 MB |
+
 ## 🚀 Installation
 
 ### Option 1: Standalone Executable (Recommended)
