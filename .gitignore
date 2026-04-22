@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+*.egg-info/
+
+# Models (large files)
+models/
+*.pth
+*.pt
+*.onnx
+*.pkl
+
+# Projects (user data)
+projects/
+*.json
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# Firebase
+firebase/.env
+firebase/*.json
+!firebase/firebase.json
+!firebase/firestore.rules
+!firebase/storage.rules
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Scratch and Backup
+_ARCHIVE/
+bck/
+mask_debug/
+test_*.py
+dump_bubbles.py
+version_info.txt
+
+# Keep assets
+!assets/*.png
+!assets/*.ico
+!assets/*.jpg
