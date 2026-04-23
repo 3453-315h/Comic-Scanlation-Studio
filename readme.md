@@ -37,10 +37,11 @@ The tool uses several specialized AI models. These are **auto-downloaded** on fi
 
 | Task | Default/Recommended Model | Source | Size |
 | :--- | :--- | :--- | :--- |
-| **Detection** | `comic-speech-bubble-detector.pt` | YOLOv8m (Specialized) | ~50 MB |
+| **Detection** | `comic-speech-bubble-detector.onnx` | YOLO-ONNX (Specialized) | ~100 MB |
 | **OCR (JA)** | `manga-ocr` | kha-white (Transformer) | ~444 MB |
-| **OCR (Multi)** | `RapidOCR` | PaddleOCR (ONNX) | ~10 MB |
+| **OCR (Multi)** | `RapidOCR` (Default) | PaddleOCR (ONNX) | ~10 MB |
 | **Inpainting** | `LaMa` | AI Masked Inpainting | ~200 MB |
+| **Translation** | `Google Translate` (Default) | Google API | N/A |
 | **Translation** | `NLLB-200` | Meta (High Quality Offline) | ~2.3 GB |
 | **Translation** | `OPUS-MT` | Helsinki-NLP (Fast Offline) | ~300 MB |
 

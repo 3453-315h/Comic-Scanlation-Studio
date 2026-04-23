@@ -30,15 +30,15 @@ class Config:
     CONFIG_FILE = PORTABLE_DIR / "config.json"
     
     # AI Models
-    DETECTOR_MODEL = "opencv"  # Options: "opencv", "yolo", "yolo-onnx"
+    DETECTOR_MODEL = "yolo-onnx"  # Options: "opencv", "yolo", "yolo-onnx"
     YOLO_MODEL_PATH = "comic-speech-bubble-detector.pt"  # Specialized model
     YOLO_CONFIDENCE = 0.10 # Lowered to 0.10 to improve recall for faint bubbles
-    OCR_MODEL = "manga_ocr"
+    OCR_MODEL = "easyocr"
     INPAINTER_MODEL = "lama"
     
     # Translation
     # Options: "deepl", "google", "openai", "nllb", "opus", "offline"
-    TRANSLATION_API = "deepl"
+    TRANSLATION_API = "google"
     OFFLINE_MODEL = "nllb"  # Options: "nllb" (high quality), "opus" (fast)
     DEFAULT_SOURCE_LANG = "ja"
     DEFAULT_TARGET_LANG = "en"
