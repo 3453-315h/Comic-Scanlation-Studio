@@ -1,0 +1,3 @@
+## 2023-11-20 - PySide Desktop Accessibility
+**Learning:** For PySide/Qt desktop applications, adding `aria-label` equivalent accessibility for screen readers requires using `setAccessibleName(str)` on the QWidget, rather than standard HTML/web attributes. Icon-only buttons (like zooming or settings) and font controls are common elements that need this attribute.
+**Action:** Always check icon-only `QPushButton` and other ambiguous controls (like `QComboBox` for font family) to ensure they have both `setToolTip()` for sighted users and `setAccessibleName()` for screen readers in PySide apps.
