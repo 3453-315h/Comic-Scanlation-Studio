@@ -1,0 +1,3 @@
+## 2024-05-17 - Connection Pooling for Translation Clients
+**Learning:** The application translates text for each speech bubble individually. Previously, remote APIs like Google Translate, DeepL, and OpenAI had a new client/session instantiated for *every single translated bubble*. This causes a new TCP handshake and TLS negotiation for every piece of text on a page, adding massive network overhead (hundreds of milliseconds per request).
+**Action:** Cache the API clients/sessions as instance variables in the `Translator` class (e.g., `requests.Session()`, `googletrans.Translator`, `openai.OpenAI`) and lazily instantiate them once per translation run to reuse connections across multiple bubble translations.
