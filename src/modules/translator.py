@@ -113,6 +113,11 @@ class Translator:
                 json.dump(self.cache, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"Failed to save cache: {e}")
+
+    def save_cache(self):
+        """Public alias for _save_cache to allow batching"""
+        self._save_cache()
+
     def download_model(self):
         """Force download/load of offline models"""
         try:
@@ -136,13 +141,14 @@ class Translator:
             logger.error(f"Failed to download model: {e}")
             raise
 
-    def translate(self, text: str, context: Optional[str] = None, api_override: Optional[str] = None) -> str:
+    def translate(self, text: str, context: Optional[str] = None, api_override: Optional[str] = None, save_cache: bool = True) -> str:
         """Translate text from source to target language
         
         Args:
             text: Text to translate
             context: Optional context for AI models
             api_override: Force use of specific backend (e.g. "google")
+            save_cache: If True, save cache immediately (disable for batch processing)
         """
         
         if not text.strip():
@@ -187,7 +193,8 @@ class Translator:
         
         if result and result != text:
              self.cache[cache_key] = result
-             self._save_cache()
+             if save_cache:
+                 self._save_cache()
              return result
              
         return text
