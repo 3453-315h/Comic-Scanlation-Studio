@@ -801,7 +801,8 @@ class MainWindow(QMainWindow):
                 return self.pipeline.translator.translate(
                     text,
                     context=f"From {self.project.name}",
-                    api_override=engine
+                    api_override=engine,
+                    save_cache=False
                 )
             except Exception as e:
                 QMessageBox.warning(self, "Translation Error", f"Failed: {e}")
@@ -811,6 +812,7 @@ class MainWindow(QMainWindow):
         dialog = TextEditorDialog(page.bubbles, self, translator_callback=translate_wrapper)
         if dialog.exec():
             # User saved changes
+            self.pipeline.translator.save_cache()
             dialog.save_changes()
             self.project.save(self.config.PROJECTS_DIR)
             
@@ -847,10 +849,11 @@ class MainWindow(QMainWindow):
         results = {}
         for b_id, text in texts_map.items():
             try:
-                translated = pipeline.translator.translate(text, context=context)
+                translated = pipeline.translator.translate(text, context=context, save_cache=False)
                 results[b_id] = translated
             except Exception as e:
                 logger.error(f"Translation failed for {b_id}: {e}")
+        pipeline.translator.save_cache()
         return results
 
     def _on_translation_complete(self, results):

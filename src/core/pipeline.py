@@ -175,11 +175,15 @@ class ScanlationPipeline:
                     bubble.text_translated = self.translator.translate(
                         bubble.text_original,
                         context=f"Comic page from {project.name}",
+                        save_cache=False
                     )
                     bubble.status = "translated"
                 except Exception as e:
                     logger.error(f"Translation failed for bubble {bubble.id}: {e}")
                     bubble.status = "failed"
+
+        # Save cache once after batch translating bubbles
+        self.translator.save_cache()
 
         # ---------------------------------------------------------------------
         # Style Analysis (Before Inpainting)
