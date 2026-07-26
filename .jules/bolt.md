@@ -1,0 +1,3 @@
+## 2024-05-24 - Optimize Contour Brightness Masking
+**Learning:** Using full-image `np.zeros_like()` arrays to create masks for highly localized operations (like computing mean brightness of contours via `cv2.mean()`) causes massive memory allocations and scales terribly with high-resolution images (which are standard in comics). For hundreds of contours, this takes multiple seconds.
+**Action:** When filtering contours or extracting local features, always crop to the Region of Interest (ROI) using `cv2.boundingRect()` and shift contour coordinates `cnt_offset = cnt - [x, y]` to create a minimally sized mask. This dramatically reduces memory and CPU overhead.

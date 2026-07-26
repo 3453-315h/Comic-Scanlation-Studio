@@ -166,9 +166,24 @@ class TextDetector:
             
             # Content Brightness Verification
             # Speech bubbles are white/bright. Dark regions are typically panels/art.
-            mask = np.zeros_like(gray)
-            cv2.drawContours(mask, [cnt], 0, 255, -1)
-            mean_val = cv2.mean(gray, mask=mask)[0]
+            # ⚡ Optimized: Use ROI-based masking instead of full-image np.zeros_like
+            # to avoid huge memory allocations per contour.
+            x_b, y_b, w_b, h_b = cv2.boundingRect(cnt)
+            # Ensure ROI is within bounds
+            x_b = max(0, x_b)
+            y_b = max(0, y_b)
+            w_b = min(width - x_b, w_b)
+            h_b = min(height - y_b, h_b)
+
+            if w_b <= 0 or h_b <= 0:
+                continue
+
+            roi_mask = np.zeros((h_b, w_b), dtype=np.uint8)
+            cnt_offset = cnt - [x_b, y_b]
+            cv2.drawContours(roi_mask, [cnt_offset], 0, 255, -1)
+
+            roi = gray[y_b:y_b+h_b, x_b:x_b+w_b]
+            mean_val = cv2.mean(roi, mask=roi_mask)[0]
             
             # Brightness threshold (relaxed significantly to 100 to allow for dark scans)
             if mean_val < 100: 
