@@ -153,6 +153,8 @@ class EditorPanel(QWidget):
         font_row = QHBoxLayout()
         
         self.font_family = QComboBox()
+        self.font_family.setAccessibleName("Font Family")
+        self.font_family.setToolTip("Select Font Family")
         self.font_family.addItems([
             "Arial", "Comic Sans MS", "CC Wild Words", 
             "Anime Ace", "Bangers", "Impact"
@@ -161,6 +163,8 @@ class EditorPanel(QWidget):
         font_row.addWidget(self.font_family, stretch=2)
         
         self.font_size = QSpinBox()
+        self.font_size.setAccessibleName("Font Size")
+        self.font_size.setToolTip("Select Font Size")
         self.font_size.setRange(8, 72)
         self.font_size.setValue(24)
         self.font_size.setSuffix("px")
@@ -173,6 +177,8 @@ class EditorPanel(QWidget):
         style_row = QHBoxLayout()
         
         self.bold_btn = QPushButton("B")
+        self.bold_btn.setAccessibleName("Bold Font Style")
+        self.bold_btn.setToolTip("Bold")
         self.bold_btn.setFixedSize(32, 32)
         self.bold_btn.setCheckable(True)
         self.bold_btn.setStyleSheet("font-weight: bold;")
@@ -180,6 +186,8 @@ class EditorPanel(QWidget):
         style_row.addWidget(self.bold_btn)
         
         self.italic_btn = QPushButton("I")
+        self.italic_btn.setAccessibleName("Italic Font Style")
+        self.italic_btn.setToolTip("Italic")
         self.italic_btn.setFixedSize(32, 32)
         self.italic_btn.setCheckable(True)
         self.italic_btn.setStyleSheet("font-style: italic;")
