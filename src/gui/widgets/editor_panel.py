@@ -176,6 +176,8 @@ class EditorPanel(QWidget):
         self.bold_btn.setFixedSize(32, 32)
         self.bold_btn.setCheckable(True)
         self.bold_btn.setStyleSheet("font-weight: bold;")
+        self.bold_btn.setToolTip("Bold")
+        self.bold_btn.setAccessibleName("Bold")
         self.bold_btn.clicked.connect(self.font_bold_clicked.emit)
         style_row.addWidget(self.bold_btn)
         
@@ -183,6 +185,8 @@ class EditorPanel(QWidget):
         self.italic_btn.setFixedSize(32, 32)
         self.italic_btn.setCheckable(True)
         self.italic_btn.setStyleSheet("font-style: italic;")
+        self.italic_btn.setToolTip("Italic")
+        self.italic_btn.setAccessibleName("Italic")
         self.italic_btn.clicked.connect(self.font_italic_clicked.emit)
         style_row.addWidget(self.italic_btn)
         
