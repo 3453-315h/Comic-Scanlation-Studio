@@ -74,6 +74,9 @@ class Translator:
         self._nllb_tokenizer = None
         self._opus_model = None
         self._opus_tokenizer = None
+        self._google_translator = None
+        self._deepl_session = None
+        self._openai_client = None
         
         if api == "deepl":
             from dotenv import load_dotenv
@@ -195,10 +198,11 @@ class Translator:
     def _google_translate(self, text: str) -> str:
         """Use googletrans library"""
         try:
-            from googletrans import Translator as GTranslator
-            translator = GTranslator()
+            if self._google_translator is None:
+                from googletrans import Translator as GTranslator
+                self._google_translator = GTranslator()
             # Use auto-detection to handle cases where the text isn't in the default project source language
-            result = translator.translate(text, src='auto', dest=self.target_lang)
+            result = self._google_translator.translate(text, src='auto', dest=self.target_lang)
             
             # Handle async result (newer googletrans versions)
             if asyncio.iscoroutine(result):
@@ -234,6 +238,8 @@ class Translator:
             return text
         
         try:
+            if self._deepl_session is None:
+                self._deepl_session = requests.Session()
             url = "https://api-free.deepl.com/v2/translate"
             params = {
                 "auth_key": self.api_key,
@@ -241,7 +247,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params)
+            response = self._deepl_session.post(url, data=params)
             return response.json()["translations"][0]["text"]
         except Exception as e:
             logger.error(f"DeepL error: {e}")
@@ -253,8 +259,9 @@ class Translator:
             return text
         
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=self.api_key)
+            if self._openai_client is None:
+                from openai import OpenAI
+                self._openai_client = OpenAI(api_key=self.api_key)
             
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
             Maintain the tone and style appropriate for comics.
@@ -264,7 +271,7 @@ class Translator:
             
             Translation:"""
             
-            response = client.chat.completions.create(
+            response = self._openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=500
