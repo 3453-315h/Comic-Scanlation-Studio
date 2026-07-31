@@ -14,6 +14,7 @@ from typing import Optional
 import logging
 from pathlib import Path
 import asyncio
+import atexit
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,10 @@ class Translator:
         # Simple disk cache
         self.cache_file = Path("bck/translation_cache.json")
         self.cache = self._load_cache()
+        self._unsaved_cache_entries = 0
+
+        # Register cache flush on exit
+        atexit.register(self.save_cache)
         
         logger.info(f"Translator initialized with backend: {api}")
         
@@ -106,13 +111,22 @@ class Translator:
         
     def _save_cache(self):
         """Save translation cache to disk"""
+        if self._unsaved_cache_entries == 0:
+            return
+
         try:
             self.cache_file.parent.mkdir(exist_ok=True)
             import json
             with open(self.cache_file, "w", encoding="utf-8") as f:
                 json.dump(self.cache, f, ensure_ascii=False, indent=2)
+            self._unsaved_cache_entries = 0
         except Exception as e:
             logger.error(f"Failed to save cache: {e}")
+
+    def save_cache(self):
+        """Public method to flush the cache to disk"""
+        self._save_cache()
+
     def download_model(self):
         """Force download/load of offline models"""
         try:
@@ -187,7 +201,10 @@ class Translator:
         
         if result and result != text:
              self.cache[cache_key] = result
-             self._save_cache()
+             self._unsaved_cache_entries += 1
+             # Batch cache writes to avoid O(N^2) disk I/O when processing multiple bubbles
+             if self._unsaved_cache_entries >= 20:
+                 self._save_cache()
              return result
              
         return text
