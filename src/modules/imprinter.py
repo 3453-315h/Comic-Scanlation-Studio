@@ -434,7 +434,6 @@ class TextImprinter:
         if bubbles:
             samples = 0
             dark_bubbles = 0
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             for b in bubbles[:5]: 
                 x1, y1, x2, y2 = map(int, b.bbox)
                 w, h = x2-x1, y2-y1
@@ -442,9 +441,12 @@ class TextImprinter:
                 cx2, cy2 = cx1 + w//2, cy1 + h//2
                 if cx1 >= cx2 or cy1 >= cy2: continue
                 
-                roi = gray[cy1:cy2, cx1:cx2]
+                roi = image[cy1:cy2, cx1:cx2]
                 if roi.size == 0: continue
-                bright = np.mean(roi)
+
+                # Performance optimization: Only convert ROI to grayscale instead of full image
+                gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+                bright = np.mean(gray_roi)
                 if bright < 80:
                     dark_bubbles += 1
                 samples += 1
