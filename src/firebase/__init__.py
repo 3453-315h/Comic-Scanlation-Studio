@@ -9,6 +9,6 @@ from .storage import CloudStorageManager
 
 __all__ = [
     "FirebaseAuthManager",
-    "FirestoreManager", 
+    "FirestoreManager",
     "CloudStorageManager"
 ]

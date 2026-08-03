@@ -4,14 +4,14 @@ Each module is swappable and encapsulates a specific model/backend.
 """
 
 from .detector import TextDetector
-from .ocr import MangaOCR
+from .imprinter import FontStyle, TextImprinter
 from .inpainter import LamaInpainter
+from .ocr import MangaOCR
 from .translator import Translator
-from .imprinter import TextImprinter, FontStyle
 
 __all__ = [
     "TextDetector",
-    "MangaOCR", 
+    "MangaOCR",
     "LamaInpainter",
     "Translator",
     "TextImprinter",

@@ -14,14 +14,12 @@ The implementation uses batch inpainting for efficiency and saves the processed 
 import logging
 from pathlib import Path
 
-from .project import Project, Page
 from ..utils.image_utils import load_image, save_image
+from .project import Page, Project
 
 logger = logging.getLogger(__name__)
 
-from ..modules.ocr import MangaOCR, RapidOCR_Module
-from ..modules.translator import Translator
-from ..modules.inpainter import Inpainter #, LamaInpainter
+from ..modules.inpainter import Inpainter  #, LamaInpainter
 
 
 class ScanlationPipeline:
@@ -33,14 +31,14 @@ class ScanlationPipeline:
 
     def __init__(self, config):
         self.config = config
-        
+
         # Lazy loaded components
         self._detector = None
         self._ocr = None
         self._inpainter = None
         self._translator = None
         self._imprinter = None
-        
+
         # Cache configuration values
         self.enable_imprint = getattr(config, 'ENABLE_IMPRINT', True)
         self.box_expansion = getattr(config, 'IMPRINT_BOX_EXPANSION', 0)
@@ -51,20 +49,20 @@ class ScanlationPipeline:
     def detector(self):
         if self._detector is None:
             from ..modules.detector import TextDetector, YOLOTextDetector
-            
+
             detector_type = getattr(self.config, 'DETECTOR_MODEL', 'opencv')
-            
+
             if detector_type == 'yolo':
                 model_path = str(getattr(self.config, 'YOLO_MODEL_PATH', 'comic-speech-bubble-detector.pt'))
                 confidence = getattr(self.config, 'YOLO_CONFIDENCE', 0.25)
                 self._detector = YOLOTextDetector(model_path, confidence)
-            
+
             elif detector_type == 'yolo-onnx':
                 from ..modules.detector_onnx import ONNXTextDetector
                 model_path = str(getattr(self.config, 'YOLO_MODEL_PATH', 'comic-speech-bubble-detector.pt'))
                 confidence = getattr(self.config, 'YOLO_CONFIDENCE', 0.25)
                 self._detector = ONNXTextDetector(model_path, confidence)
-                
+
             else:
                 self._detector = TextDetector("opencv-robust")
         return self._detector
@@ -75,10 +73,10 @@ class ScanlationPipeline:
             # Select OCR Engine based on language
             source_lang = getattr(self.config, 'DEFAULT_SOURCE_LANG', 'ja')
             CJK_LANGS = ['ja', 'zh', 'zh-cn', 'zh-tw', 'ko']
-            
+
             # Map simplified configuration to actual classes
             ocr_model_pref = getattr(self.config, 'OCR_MODEL', 'manga_ocr')
-            
+
             if ocr_model_pref == 'manga_ocr' or (ocr_model_pref == 'auto' and source_lang in CJK_LANGS):
                 logger.info("Loading MangaOCR...")
                 from ..modules.ocr import MangaOCR
@@ -138,7 +136,7 @@ class ScanlationPipeline:
                 line_height=getattr(self.config, 'IMPRINT_LINE_SPACING', 1.2),
             )
         return self._font_style
-    
+
     @font_style.setter
     def font_style(self, value):
         self._font_style = value
@@ -214,18 +212,18 @@ class ScanlationPipeline:
         # Stage 5 – Text Imprinting
         # ---------------------------------------------------------------------
         final_image = inpainted_image
-        
+
         if self.enable_imprint:
             logger.info("[5/5] Imprinting translated text")
             translated_bubbles = [b for b in bubbles if b.status == "translated" and b.text_translated]
-            
+
             if translated_bubbles:
                 try:
                     # Optionally analyze style from original image
                     # Moved to before inpainting for safety
                     # if getattr(self.config, 'AUTO_STYLE', False):
                     #    self.font_style = self.imprinter.analyze_style(image, bubbles)
-                    
+
                     # Apply box expansion if configured
                     if self.box_expansion != 0:
                         for b in translated_bubbles:
@@ -236,10 +234,10 @@ class ScanlationPipeline:
                                 min(image.shape[1], x2 + self.box_expansion),
                                 min(image.shape[0], y2 + self.box_expansion)
                             ]
-                    
+
                     final_image = self.imprinter.imprint(
-                        inpainted_image, 
-                        translated_bubbles, 
+                        inpainted_image,
+                        translated_bubbles,
                         self.font_style,
                         auto_fit=True,
                         use_elliptical_wrapping=self.shape_wrapping

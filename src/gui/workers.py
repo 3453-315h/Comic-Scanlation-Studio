@@ -1,7 +1,8 @@
-import sys
 import logging
+import sys
 import traceback
-from PySide6.QtCore import QThread, Signal, QObject
+
+from PySide6.QtCore import QObject, QThread, Signal
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +31,13 @@ class WorkerThread(QThread):
     Worker thread that executes a function in a separate thread.
     """
     def __init__(self, fn, *args, **kwargs):
-        super(WorkerThread, self).__init__()
+        super().__init__()
         # Store constructor arguments (re-used for processing)
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()
-        
+
     def run(self):
         """
         Initialise the runner function with passed args, kwargs.
@@ -51,9 +52,9 @@ class WorkerThread(QThread):
                     self.signals.status.emit(msg)
                     if val is not None:
                          self.signals.progress.emit(val)
-                
+
                 self.kwargs['progress_callback'] = progress_cb
-                
+
             result = self.fn(*self.args, **self.kwargs)
         except Exception:
             traceback.print_exc()

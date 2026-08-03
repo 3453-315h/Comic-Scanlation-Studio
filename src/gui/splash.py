@@ -4,10 +4,11 @@ Splash Screen - Comic Scanlation Studio
 Displays the application logo during startup.
 """
 
-from PySide6.QtWidgets import QSplashScreen, QApplication
-from PySide6.QtGui import QPixmap, QPainter, QColor
-from PySide6.QtCore import Qt, QTimer
 from pathlib import Path
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtWidgets import QApplication, QSplashScreen
 
 
 class SplashScreen(QSplashScreen):
@@ -20,17 +21,17 @@ class SplashScreen(QSplashScreen):
             pixmap.fill(QColor(40, 44, 52))
         else:
             pixmap = QPixmap(str(splash_path))
-            
+
             # Scale if too large, but keep aspect ratio
             if pixmap.width() > 800:
                 pixmap = pixmap.scaledToWidth(800, Qt.TransformationMode.SmoothTransformation)
-        
+
         super().__init__(pixmap)
-        
+
         # UI settings
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.showMessage("Loading...", Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter, QColor("white"))
-    
+
     def show_message(self, message):
         """Update splash message"""
         self.showMessage(message, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter, QColor("black"))

@@ -4,9 +4,8 @@ Theme System - 8-bit-magic-wand Style
 Dark/light mode theming matching the modern 8-bit-magic-wand aesthetic.
 """
 
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QPalette, QColor
-from PySide6.QtCore import Qt
 
 # Color definitions matching 8-bit-magic-wand
 DARK_THEME = {
@@ -43,7 +42,7 @@ LIGHT_THEME = {
 def get_stylesheet(dark: bool = True) -> str:
     """Generate Qt stylesheet for the application"""
     theme = DARK_THEME if dark else LIGHT_THEME
-    
+
     return f"""
     /* Global Styles */
     QMainWindow, QWidget {{
@@ -299,11 +298,11 @@ def apply_theme(app: QApplication, dark: bool = True):
     """Apply theme to the entire application"""
     stylesheet = get_stylesheet(dark)
     app.setStyleSheet(stylesheet)
-    
+
     # Also set the palette for native widgets
     theme = DARK_THEME if dark else LIGHT_THEME
     palette = QPalette()
-    
+
     palette.setColor(QPalette.ColorRole.Window, QColor(theme['bg_color']))
     palette.setColor(QPalette.ColorRole.WindowText, QColor(theme['text_primary']))
     palette.setColor(QPalette.ColorRole.Base, QColor(theme['input_color']))
@@ -314,7 +313,7 @@ def apply_theme(app: QApplication, dark: bool = True):
     palette.setColor(QPalette.ColorRole.Highlight, QColor(theme['accent_color']))
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor('#FFFFFF'))
     palette.setColor(QPalette.ColorRole.Link, QColor(theme['accent_color']))
-    
+
     app.setPalette(palette)
 
 
