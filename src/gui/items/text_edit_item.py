@@ -7,13 +7,17 @@ An interactive text item that can be:
 - Resized via scroll wheel or context menu
 """
 
+from typing import Any
+
+from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QTextCursor
 from PySide6.QtWidgets import (
-    QGraphicsTextItem, QGraphicsSceneMouseEvent, 
-    QGraphicsSceneContextMenuEvent, QMenu, QInputDialog
+    QGraphicsSceneContextMenuEvent,
+    QGraphicsSceneMouseEvent,
+    QGraphicsTextItem,
+    QInputDialog,
+    QMenu,
 )
-from PySide6.QtCore import Qt, QRectF, Signal, QObject
-from PySide6.QtGui import QFont, QColor, QTextCursor, QPainter, QPen, QFontMetrics
-from typing import Optional, Any
 
 
 class TextEditItemSignals(QObject):
@@ -34,18 +38,18 @@ class TextEditItem(QGraphicsTextItem):
     - Mouse wheel to resize font
     - Context menu for options
     """
-    
+
     def __init__(self, text: str, bubble_ref: Any = None, parent=None):
         super().__init__(text, parent)
-        
+
         self.bubble_ref = bubble_ref  # Reference to TextBubble data
         self.signals = TextEditItemSignals()
-        
+
         # Default styling
         self._font_size = 16
         self._font_family = "Arial"
         self._text_color = QColor(0, 0, 0)
-        
+
         # Setup
         self.setFlags(
             QGraphicsTextItem.GraphicsItemFlag.ItemIsSelectable |
@@ -54,17 +58,17 @@ class TextEditItem(QGraphicsTextItem):
         )
         self.setAcceptHoverEvents(True)
         self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
-        
+
         # Apply initial font
         self._apply_font()
         self.setDefaultTextColor(self._text_color)
-    
+
     def _apply_font(self):
         """Apply current font settings"""
         font = QFont(self._font_family, self._font_size)
         self.setFont(font)
-    
-    def set_style(self, font_family: str = None, font_size: int = None, 
+
+    def set_style(self, font_family: str = None, font_size: int = None,
                   color: tuple = None):
         """Set text styling"""
         if font_family:
@@ -75,9 +79,9 @@ class TextEditItem(QGraphicsTextItem):
             # Expect BGR tuple, convert to QColor (RGB)
             self._text_color = QColor(color[2], color[1], color[0])
             self.setDefaultTextColor(self._text_color)
-        
+
         self._apply_font()
-    
+
     def auto_fit_to_bubble(self, bubble_width: int, bubble_height: int,
                            padding: int = None, line_height: float = 1.2) -> float:
         """
@@ -89,8 +93,6 @@ class TextEditItem(QGraphicsTextItem):
         Returns:
             The rendered text block height in pixels (for vertical centering by caller).
         """
-        from PySide6.QtWidgets import QGraphicsTextItem
-        from PySide6.QtCore import QSizeF
 
         text = self.toPlainText().strip()
         if not text:
@@ -105,7 +107,6 @@ class TextEditItem(QGraphicsTextItem):
 
         # Use a QTextDocument for accurate measurement (handles wrapping, line spacing, etc.)
         from PySide6.QtGui import QTextOption
-        from PySide6.QtWidgets import QApplication
 
         doc = self.document().clone()  # Clone current doc so we can mutate freely
 
@@ -148,7 +149,7 @@ class TextEditItem(QGraphicsTextItem):
 
         # Return actual rendered height so caller can vertically centre
         return self.document().size().height()
-    
+
     def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent):
         """Enable text editing on double-click"""
         self.signals.interactionStarted.emit()
@@ -161,27 +162,27 @@ class TextEditItem(QGraphicsTextItem):
         cursor.select(QTextCursor.SelectionType.Document)
         self.setTextCursor(cursor)
         super().mouseDoubleClickEvent(event)
-    
+
         """Handle mouse press - save state for potential move"""
         self.signals.interactionStarted.emit()
         super().mousePressEvent(event)
-        
+
     def mouseReleaseEvent(self, event):
         """Sync position on release"""
         super().mouseReleaseEvent(event)
         self._sync_to_bubble()
-    
+
     def focusOutEvent(self, event):
         """Disable editing when focus is lost"""
         self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         cursor = self.textCursor()
         cursor.clearSelection()
         self.setTextCursor(cursor)
-        
+
         # Sync text back to bubble
         self._sync_to_bubble()
         super().focusOutEvent(event)
-    
+
     def wheelEvent(self, event):
         """Resize font with mouse wheel"""
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
@@ -191,43 +192,43 @@ class TextEditItem(QGraphicsTextItem):
                 self._font_size = min(72, self._font_size + 2)
             else:
                 self._font_size = max(8, self._font_size - 2)
-            
+
             self._apply_font()
             self.signals.fontSizeChanged.emit(self._font_size)
             self._sync_to_bubble()  # Sync font size change
             event.accept()
         else:
             super().wheelEvent(event)
-    
+
     def contextMenuEvent(self, event: QGraphicsSceneContextMenuEvent):
         """Show context menu for text options"""
         menu = QMenu()
-        
+
         # Font size submenu
         size_menu = menu.addMenu("Font Size")
         for size in [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48]:
             action = size_menu.addAction(f"{size}pt")
             action.triggered.connect(lambda checked, s=size: self._set_font_size(s))
-        
+
         menu.addSeparator()
-        
+
         # Edit text
         edit_action = menu.addAction("Edit Text...")
         edit_action.triggered.connect(self._edit_text_dialog)
-        
+
         # Delete
         delete_action = menu.addAction("Delete")
         delete_action.triggered.connect(self._delete_self)
-        
+
         menu.exec_(event.screenPos())
-    
+
     def _set_font_size(self, size: int):
         """Set font size from menu"""
         self._font_size = size
         self._apply_font()
         self.signals.fontSizeChanged.emit(size)
         self._sync_to_bubble()  # Sync font size change
-    
+
     def _edit_text_dialog(self):
         """Open dialog to edit text"""
         current_text = self.toPlainText()
@@ -237,27 +238,27 @@ class TextEditItem(QGraphicsTextItem):
         if ok and new_text:
             self.setPlainText(new_text)
             self._sync_to_bubble()
-    
+
     def _delete_self(self):
         """Remove this item from scene"""
         if self.scene():
             self.scene().removeItem(self)
-    
+
     def toggle_bold(self):
         """Toggle bold on current selection"""
         if not self.textInteractionFlags() & Qt.TextInteractionFlag.TextEditorInteraction:
             return
-            
+
         self.signals.interactionStarted.emit()
         cursor = self.textCursor()
         fmt = cursor.charFormat()
-        
+
         # Toggle weight
         if fmt.fontWeight() == QFont.Weight.Bold:
             fmt.setFontWeight(QFont.Weight.Normal)
         else:
             fmt.setFontWeight(QFont.Weight.Bold)
-            
+
         cursor.mergeCharFormat(fmt)
         self.setTextCursor(cursor)
         self._sync_to_bubble()
@@ -266,36 +267,36 @@ class TextEditItem(QGraphicsTextItem):
         """Toggle italic on current selection"""
         if not self.textInteractionFlags() & Qt.TextInteractionFlag.TextEditorInteraction:
             return
-            
+
         self.signals.interactionStarted.emit()
         cursor = self.textCursor()
         fmt = cursor.charFormat()
-        
+
         # Toggle italic
         fmt.setFontItalic(not fmt.fontItalic())
-            
+
         cursor.mergeCharFormat(fmt)
         self.setTextCursor(cursor)
         self._sync_to_bubble()
 
     def get_font_size(self) -> int:
         return self._font_size
-    
+
     def get_text(self) -> str:
         return self.toHtml()  # Return HTML to preserve formatting
-    
+
     def _sync_to_bubble(self):
         """Sync current text and position back to TextBubble data"""
         if self.bubble_ref:
             # Update translated text (Now as HTML)
             self.bubble_ref.text_translated = self.toHtml()
-            
+
             # Update position (store offset from bbox)
             pos = self.scenePos()
             self.bubble_ref.text_offset = (pos.x(), pos.y())
-            
+
             # Update font settings
             self.bubble_ref.font_size = self._font_size
             self.bubble_ref.font_family = self._font_family
-            
+
             self.signals.textChanged.emit(self.toHtml())

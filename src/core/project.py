@@ -1,25 +1,25 @@
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import List, Dict, Optional
 import json
-from datetime import datetime
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+
 
 @dataclass
 class TextBubble:
     """Represents a detected text bubble"""
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    bbox: List[int] = field(default_factory=list)  # [x1, y1, x2, y2]
+    bbox: list[int] = field(default_factory=list)  # [x1, y1, x2, y2]
     text_original: str = ""
     text_translated: str = ""
     confidence: float = 0.0
-    inpainting_mask: Optional[Path] = None
+    inpainting_mask: Path | None = None
     font_size: int = 12
     font_family: str = "Arial"
     status: str = "pending"  # pending, translated, approved, failed
-    text_offset: Optional[tuple] = None  # (x, y) offset for text rendering
-    
-    def to_dict(self) -> Dict:
+    text_offset: tuple | None = None  # (x, y) offset for text rendering
+
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "bbox": self.bbox,
@@ -36,11 +36,11 @@ class TextBubble:
 class Page:
     """Represents a comic page"""
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    file_path: Optional[Path] = None
-    bubbles: List[TextBubble] = field(default_factory=list)
-    processed_image_path: Optional[Path] = None
-    
-    def to_dict(self) -> Dict:
+    file_path: Path | None = None
+    bubbles: list[TextBubble] = field(default_factory=list)
+    processed_image_path: Path | None = None
+
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "file_path": str(self.file_path) if self.file_path else None,
@@ -50,11 +50,11 @@ class Page:
 
 class Project:
     """Manages a scanlation project"""
-    def __init__(self, name: str, project_id: Optional[str] = None):
+    def __init__(self, name: str, project_id: str | None = None):
         self.id = project_id or str(uuid.uuid4())[:12]
         self.name = name
         self.created_at = datetime.now()
-        self.pages: Dict[str, Page] = {}
+        self.pages: dict[str, Page] = {}
         self.settings = {
             "source_language": "ja",
             "target_language": "en",
@@ -66,18 +66,18 @@ class Project:
             "ignore_sfx": True
         }
         self.cloud_synced = False
-    
+
     def add_page(self, image_path: Path) -> Page:
         """Add a new page to the project"""
         page = Page(file_path=image_path)
         self.pages[page.id] = page
         return page
-    
+
     def save(self, projects_dir: Path):
         """Save project to local disk"""
         project_dir = projects_dir / self.id
         project_dir.mkdir(exist_ok=True)
-        
+
         # Save project metadata
         data = {
             "id": self.id,
@@ -86,24 +86,24 @@ class Project:
             "settings": self.settings,
             "pages": {pid: p.to_dict() for pid, p in self.pages.items()}
         }
-        
+
         with open(project_dir / "project.json", "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-    
+
     @classmethod
     def load(cls, project_dir: Path) -> "Project":
         """Load project from disk"""
-        with open(project_dir / "project.json", "r", encoding="utf-8") as f:
+        with open(project_dir / "project.json", encoding="utf-8") as f:
             data = json.load(f)
-        
+
         project = cls(name=data["name"], project_id=data["id"])
         project.created_at = datetime.fromisoformat(data["created_at"])
         project.settings = data["settings"]
-        
+
         for pid, pdata in data["pages"].items():
             page = Page(id=pid, file_path=Path(pdata["file_path"]))
             page.processed_image_path = Path(pdata["processed_image_path"]) if pdata["processed_image_path"] else None
-            
+
             for bdata in pdata["bubbles"]:
                 bubble = TextBubble(
                     id=bdata["id"],
@@ -117,7 +117,7 @@ class Project:
                     text_offset=bdata.get("text_offset")
                 )
                 page.bubbles.append(bubble)
-            
+
             project.pages[pid] = page
-        
+
         return project

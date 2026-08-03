@@ -6,7 +6,6 @@ Optimized for European languages (comics, BD, fumetti, etc.)
 """
 
 import logging
-from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +115,7 @@ SUPPORTED_LANGUAGES = [
 ]
 
 
-def detect_language_from_text(text: str) -> Tuple[str, str, float]:
+def detect_language_from_text(text: str) -> tuple[str, str, float]:
     """Detect language from text content
     
     Args:
@@ -127,28 +126,28 @@ def detect_language_from_text(text: str) -> Tuple[str, str, float]:
     """
     if not text or len(text.strip()) < 3:
         return "en", "Comic Sans MS", 0.0  # Default to English
-    
+
     # Use langdetect library
     try:
         from langdetect import detect, detect_langs
         detected = detect(text)
-        
+
         # Normalize Chinese variants
         if detected == "zh-cn" or detected == "zh-tw":
             pass  # Keep as is
         elif detected.startswith("zh"):
             detected = "zh-cn"
-        
+
         # Get confidence
         probs = detect_langs(text)
         confidence = probs[0].prob if probs else 0.5
-        
+
         font = LANGUAGE_PATTERNS.get(detected, {}).get("font_suggestion", "Comic Sans MS")
         lang_name = LANGUAGE_PATTERNS.get(detected, {}).get("name", detected.upper())
-        
+
         logger.info(f"Detected language: {lang_name} ({detected}) - confidence: {confidence:.2f}")
         return detected, font, confidence
-        
+
     except ImportError:
         logger.warning("langdetect not installed, defaulting to English")
         return "en", "Comic Sans MS", 0.0
