@@ -75,6 +75,10 @@ class Translator:
         self._opus_model = None
         self._opus_tokenizer = None
         
+        # Lazy-loaded API clients for connection pooling
+        self._requests_session = None
+        self._openai_client = None
+
         if api == "deepl":
             from dotenv import load_dotenv
             import os
@@ -234,6 +238,11 @@ class Translator:
             return text
         
         try:
+            # Performance optimization: Reuse requests.Session() to prevent repeated TLS handshakes.
+            # This speeds up translation significantly when translating multiple bubbles in a page.
+            if self._requests_session is None:
+                self._requests_session = requests.Session()
+
             url = "https://api-free.deepl.com/v2/translate"
             params = {
                 "auth_key": self.api_key,
@@ -241,7 +250,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params)
+            response = self._requests_session.post(url, data=params)
             return response.json()["translations"][0]["text"]
         except Exception as e:
             logger.error(f"DeepL error: {e}")
@@ -254,7 +263,10 @@ class Translator:
         
         try:
             from openai import OpenAI
-            client = OpenAI(api_key=self.api_key)
+            # Performance optimization: Reuse OpenAI client to prevent repeated TLS handshakes.
+            # This significantly reduces latency when translating multiple text bubbles sequentially.
+            if self._openai_client is None:
+                self._openai_client = OpenAI(api_key=self.api_key)
             
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
             Maintain the tone and style appropriate for comics.
@@ -264,7 +276,7 @@ class Translator:
             
             Translation:"""
             
-            response = client.chat.completions.create(
+            response = self._openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=500
