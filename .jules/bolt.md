@@ -1,0 +1,3 @@
+## 2024-08-10 - Reuse API clients for translation APIs
+**Learning:** In a multi-threaded architecture (like short-lived WorkerThreads running background tasks), caching async clients (e.g. googletrans) across threads leads to asyncio event loop thread-safety issues. However, caching synchronous HTTP clients (e.g. requests.Session, openai.OpenAI) within the same thread or sharing thread-safe clients across threads is essential for avoiding repeated TLS handshakes during loops/batch processing.
+**Action:** When making external API calls in loops or batch processing in Python, use connection pooling via `requests.Session()` or reuse client instances for synchronous clients, but be careful with async clients across threads.
