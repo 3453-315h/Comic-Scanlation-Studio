@@ -134,6 +134,8 @@ class EditorPanel(QWidget):
         self.process_all_btn = QPushButton("▶️  Process All Stages")
         self.process_all_btn.setObjectName("PrimaryButton")
         self.process_all_btn.setMinimumHeight(48)
+        self.process_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.process_all_btn.setAccessibleName("Process All Stages")
         self.process_all_btn.clicked.connect(self.process_all_clicked.emit)
         layout.addWidget(self.process_all_btn)
         
@@ -176,6 +178,9 @@ class EditorPanel(QWidget):
         self.bold_btn.setFixedSize(32, 32)
         self.bold_btn.setCheckable(True)
         self.bold_btn.setStyleSheet("font-weight: bold;")
+        self.bold_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.bold_btn.setAccessibleName("Bold Font")
+        self.bold_btn.setToolTip("Bold Font")
         self.bold_btn.clicked.connect(self.font_bold_clicked.emit)
         style_row.addWidget(self.bold_btn)
         
@@ -183,6 +188,9 @@ class EditorPanel(QWidget):
         self.italic_btn.setFixedSize(32, 32)
         self.italic_btn.setCheckable(True)
         self.italic_btn.setStyleSheet("font-style: italic;")
+        self.italic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.italic_btn.setAccessibleName("Italic Font")
+        self.italic_btn.setToolTip("Italic Font")
         self.italic_btn.clicked.connect(self.font_italic_clicked.emit)
         style_row.addWidget(self.italic_btn)
         
