@@ -1,0 +1,3 @@
+## 2024-11-20 - Connection Pooling in WorkerThreads
+**Learning:** The application runs background tasks (like translations) inside short-lived WorkerThread instances, meaning each task creates a new asyncio event loop. Caching asyncio-dependent clients across threads causes thread-safety issues, but synchronous clients like `requests.Session` or `OpenAI` must be pooled. Repeated TLS handshakes in batch processing (like translations) without connection pooling cause severe performance bottlenecks.
+**Action:** When making external API calls in loops or batch processing (e.g., DeepL, OpenAI), always use connection pooling (like `requests.Session()`) or reuse client instances to prevent repeated TLS handshakes.
