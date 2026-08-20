@@ -575,7 +575,7 @@ class TextImprinter:
                 if val < 0:
                     val = 0
                 width_at_y = 2 * a * np.sqrt(val) * 0.9  # 10% padding
-            except:
+            except Exception:
                 width_at_y = 10
             
             available_width = max(10, width_at_y)
