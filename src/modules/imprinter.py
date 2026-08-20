@@ -609,10 +609,7 @@ class TextImprinter:
                     # Word doesn't fit
                     if current_line:
                         # Line has content, finalize it
-                        if not from_pending:
-                            # Put word back for next line
-                            pass
-                        else:
+                        if from_pending:
                             pending_fragment = word
                         line_complete = True
                     else:
