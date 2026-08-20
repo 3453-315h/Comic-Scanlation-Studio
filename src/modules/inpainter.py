@@ -312,7 +312,8 @@ class Inpainter:
                     
                     try:
                         roi_text_mask = self._create_text_mask(image, bbox)[y1:y2, x1:x2]
-                    except: continue
+                    except Exception:
+                        continue
                     
                     if roi_text_mask.sum() == 0: continue
                     
