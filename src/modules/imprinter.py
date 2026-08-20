@@ -25,7 +25,7 @@ except ImportError:
 from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import (
     QImage, QPainter, QFont, QFontMetrics, QColor, QPen, QFontDatabase,
-    QTextDocument, QTextOption, QAbstractTextDocumentLayout, QTextLayout
+    QTextDocument, QTextOption, QTextLayout
 )
 
 logger = logging.getLogger(__name__)
