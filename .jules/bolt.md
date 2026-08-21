@@ -1,0 +1,3 @@
+## 2024-08-21 - Reuse synchronous API clients (OpenAI/Requests)
+**Learning:** In this application, background tasks (like translations) run inside short-lived `WorkerThread` instances that create new `asyncio` event loops. While we cannot cache asyncio-dependent clients (like `googletrans.Translator`) across threads due to event loop thread-safety issues, synchronous clients like `requests.Session` or `openai.OpenAI` CAN and SHOULD be pooled.
+**Action:** Always reuse instances of `requests.Session()` or `OpenAI()` in classes that process batches or sequences of items to avoid redundant TLS handshakes on every single API call, but instantiate any `asyncio`-backed clients locally within the method or thread.
