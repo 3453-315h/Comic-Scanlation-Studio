@@ -1,0 +1,3 @@
+## 2024-05-18 - Micro-UX improvements for interactive elements
+**Learning:** Some interactive UI elements (buttons, checkboxes) in the application lacked clear visual cues for clickability (like a pointer cursor) and accessibility (like ARIA/accessible names and tooltips), especially icon-only buttons.
+**Action:** Always ensure that `setCursor(Qt.CursorShape.PointingHandCursor)` is applied to interactive elements like buttons and checkboxes to improve visual feedback on hover. Additionally, icon-only buttons must have `setAccessibleName` and `setToolTip` to provide context for screen readers and users who need help understanding the icon's purpose.
