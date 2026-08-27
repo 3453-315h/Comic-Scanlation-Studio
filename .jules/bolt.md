@@ -1,0 +1,3 @@
+## 2024-05-24 - API Connection Pooling
+**Learning:** Making external API calls in loops or batch processing without connection pooling adds significant network overhead due to repeated TCP connections and TLS handshakes. In this app's architecture, translation happens on many individual text blocks on a page, causing a performance bottleneck if standard `requests.post()` or instantiating a new `OpenAI()` client is used for every call.
+**Action:** When making external API calls, especially in batching scenarios, always use connection pooling by reusing client instances (like `requests.Session()` or `OpenAI()`) across multiple calls.
