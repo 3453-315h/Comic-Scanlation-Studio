@@ -1,0 +1,3 @@
+## 2024-05-15 - Connection Pooling in Translation Backends
+**Learning:** Found that external API calls to DeepL and OpenAI were creating new HTTP clients and TLS connections on every request in `Translator`. While asyncio-dependent clients (like googletrans) can't be safely cached across the short-lived WorkerThread loops in this app, synchronous clients (like requests.Session and OpenAI) are thread-safe for reuse and significantly reduce latency by avoiding repeated TLS handshakes during batch translation.
+**Action:** Always use connection pooling (`requests.Session()`) and reuse client instances (like `OpenAI()`) for synchronous API calls, but remain cautious with async clients across thread boundaries.
