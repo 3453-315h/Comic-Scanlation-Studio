@@ -1,0 +1,3 @@
+## 2024-05-15 - Translator Connection Pooling
+**Learning:** In the background task architecture, creating a new `requests` session or `openai.OpenAI` client on every translation call within a batch causes significant unnecessary overhead due to repeated TLS handshakes. Because these are instantiated per `Translator` instance and run within synchronous calls in a thread pool (where instances are either short-lived per task or safely scoped), reusing these clients across a batch is safe.
+**Action:** Always use connection pooling (`requests.Session()`) or reuse client instances (like `openai.OpenAI()`) when making external API calls in loops or batch processing.
