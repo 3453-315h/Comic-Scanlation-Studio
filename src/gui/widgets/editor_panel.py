@@ -133,6 +133,9 @@ class EditorPanel(QWidget):
         # Process All Button
         self.process_all_btn = QPushButton("▶️  Process All Stages")
         self.process_all_btn.setObjectName("PrimaryButton")
+        self.process_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.process_all_btn.setAccessibleName("Process All Stages")
+        self.process_all_btn.setToolTip("Process All Stages")
         self.process_all_btn.setMinimumHeight(48)
         self.process_all_btn.clicked.connect(self.process_all_clicked.emit)
         layout.addWidget(self.process_all_btn)
@@ -175,6 +178,9 @@ class EditorPanel(QWidget):
         self.bold_btn = QPushButton("B")
         self.bold_btn.setFixedSize(32, 32)
         self.bold_btn.setCheckable(True)
+        self.bold_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.bold_btn.setAccessibleName("Bold")
+        self.bold_btn.setToolTip("Bold")
         self.bold_btn.setStyleSheet("font-weight: bold;")
         self.bold_btn.clicked.connect(self.font_bold_clicked.emit)
         style_row.addWidget(self.bold_btn)
@@ -182,6 +188,9 @@ class EditorPanel(QWidget):
         self.italic_btn = QPushButton("I")
         self.italic_btn.setFixedSize(32, 32)
         self.italic_btn.setCheckable(True)
+        self.italic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.italic_btn.setAccessibleName("Italic")
+        self.italic_btn.setToolTip("Italic")
         self.italic_btn.setStyleSheet("font-style: italic;")
         self.italic_btn.clicked.connect(self.font_italic_clicked.emit)
         style_row.addWidget(self.italic_btn)
@@ -191,6 +200,9 @@ class EditorPanel(QWidget):
         
         # Auto-fit checkbox
         self.auto_fit_check = QCheckBox("Auto-fit text to bubble")
+        self.auto_fit_check.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.auto_fit_check.setAccessibleName("Auto-fit text to bubble")
+        self.auto_fit_check.setToolTip("Auto-fit text to bubble")
         self.auto_fit_check.setChecked(True)
         layout.addWidget(self.auto_fit_check)
         
