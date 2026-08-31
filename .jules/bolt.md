@@ -1,0 +1,3 @@
+## 2024-05-24 - API Client Connection Pooling in Worker Threads
+ **Learning:** The application's architecture processes tasks in short-lived `WorkerThread` instances, each creating a new asyncio event loop. While asyncio-dependent clients (like `googletrans.Translator`) cannot be safely cached across these threads, synchronous clients like `requests.Session` (for DeepL) and `OpenAI` client can and should be pooled at the class level to prevent repeated TLS handshakes during batch processing of comic bubbles.
+ **Action:** Cache synchronous API clients (e.g., `requests.Session`, `OpenAI`) as instance variables on the `Translator` class to reuse connections across multiple translation calls in the pipeline, avoiding expensive TLS overhead on every bubble.
