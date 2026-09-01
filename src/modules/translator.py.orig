@@ -9,11 +9,11 @@ Supports multiple translation backends:
 - OPUS-MT Offline (fast, lightweight)
 """
 
-import asyncio
+import requests
+from typing import Optional
 import logging
 from pathlib import Path
-
-import requests
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -74,19 +74,15 @@ class Translator:
         self._nllb_tokenizer = None
         self._opus_model = None
         self._opus_tokenizer = None
-        self._session = requests.Session() # Connection pooling for APIs
-        self._openai_client = None
 
         if api == "deepl":
-            import os
-
             from dotenv import load_dotenv
+            import os
             load_dotenv()
             self.api_key = os.getenv("DEEPL_API_KEY")
         elif api == "openai":
-            import os
-
             from dotenv import load_dotenv
+            import os
             load_dotenv()
             self.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -102,7 +98,7 @@ class Translator:
         if self.cache_file.exists():
             try:
                 import json
-                with open(self.cache_file, encoding="utf-8") as f:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
                 logger.error(f"Failed to load cache: {e}")
@@ -140,7 +136,7 @@ class Translator:
             logger.error(f"Failed to download model: {e}")
             raise
 
-    def translate(self, text: str, context: str | None = None, api_override: str | None = None) -> str:
+    def translate(self, text: str, context: Optional[str] = None, api_override: Optional[str] = None) -> str:
         """Translate text from source to target language
 
         Args:
@@ -245,23 +241,20 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = self._session.post(url, data=params)
+            response = requests.post(url, data=params)
             return response.json()["translations"][0]["text"]
         except Exception as e:
             logger.error(f"DeepL error: {e}")
             return text
 
-    def _openai_translate(self, text: str, context: str | None = None) -> str:
+    def _openai_translate(self, text: str, context: Optional[str] = None) -> str:
         """Use OpenAI GPT for contextual translation"""
         if not self.api_key:
             return text
 
         try:
             from openai import OpenAI
-            # Lazy load client to pool connections
-            if self._openai_client is None:
-                self._openai_client = OpenAI(api_key=self.api_key)
-            client = self._openai_client
+            client = OpenAI(api_key=self.api_key)
 
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
             Maintain the tone and style appropriate for comics.

@@ -1,0 +1,32 @@
+--- src/modules/translator.py
++++ src/modules/translator.py
+@@ -69,6 +69,8 @@
+         self._nllb_tokenizer = None
+         self._opus_model = None
+         self._opus_tokenizer = None
++        self._session = requests.Session() # Connection pooling for APIs
++        self._openai_client = None
+
+         if api == "deepl":
+             from dotenv import load_dotenv
+@@ -239,7 +241,7 @@
+                 "source_lang": self.source_lang.upper(),
+                 "target_lang": self.target_lang.upper()
+             }
+-            response = requests.post(url, data=params)
++            response = self._session.post(url, data=params)
+             return response.json()["translations"][0]["text"]
+         except Exception as e:
+             logger.error(f"DeepL error: {e}")
+@@ -253,7 +255,10 @@
+
+         try:
+             from openai import OpenAI
+-            client = OpenAI(api_key=self.api_key)
++            # Lazy load client to pool connections
++            if self._openai_client is None:
++                self._openai_client = OpenAI(api_key=self.api_key)
++            client = self._openai_client
+
+             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
+             Maintain the tone and style appropriate for comics.
