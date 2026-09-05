@@ -20,28 +20,35 @@ class FirestoreManager:
         self.db = firestore.Client()
         logger.info("Firestore client initialized")
     
-    def save_project(self, user_id: str, project_data: Dict[str, Any]) -> bool:
+    def save_project(self, user_id: str, project_data: Dict[str, Any], batch: Optional[Any] = None) -> bool:
         """Save project to Firestore"""
         try:
             doc_ref = self.db.collection("users").document(user_id).collection("projects").document(project_data["id"])
-            doc_ref.set({
+            data = {
                 "name": project_data["name"],
                 "created_at": project_data["created_at"],
                 "settings": project_data["settings"],
                 "page_count": len(project_data.get("pages", {})),
                 "synced_at": firestore.SERVER_TIMESTAMP
-            })
+            }
+            if batch is not None:
+                batch.set(doc_ref, data)
+            else:
+                doc_ref.set(data)
             logger.info(f"Saved project {project_data['id']} for user {user_id}")
             return True
         except Exception as e:
             logger.error(f"Failed to save project to Firestore: {e}")
             return False
     
-    def save_page(self, user_id: str, project_id: str, page_id: str, page_data: Dict) -> bool:
+    def save_page(self, user_id: str, project_id: str, page_id: str, page_data: Dict, batch: Optional[Any] = None) -> bool:
         """Save page data to Firestore"""
         try:
             doc_ref = self.db.collection("users").document(user_id).collection("projects").document(project_id).collection("pages").document(page_id)
-            doc_ref.set(page_data)
+            if batch is not None:
+                batch.set(doc_ref, page_data)
+            else:
+                doc_ref.set(page_data)
             logger.debug(f"Saved page {page_id} for project {project_id}")
             return True
         except Exception as e:
@@ -63,12 +70,25 @@ class FirestoreManager:
     def sync_project(self, user_id: str, project_data: Dict) -> bool:
         """Full project sync (including pages)"""
         try:
+            batch = self.db.batch()
+            op_count = 0
+
             # Save project metadata
-            self.save_project(user_id, project_data)
+            self.save_project(user_id, project_data, batch=batch)
+            op_count += 1
             
             # Save each page
             for page_id, page_data in project_data.get("pages", {}).items():
-                self.save_page(user_id, project_data["id"], page_id, page_data)
+                self.save_page(user_id, project_data["id"], page_id, page_data, batch=batch)
+                op_count += 1
+
+                if op_count >= 500:
+                    batch.commit()
+                    batch = self.db.batch()
+                    op_count = 0
+
+            if op_count > 0:
+                batch.commit()
             
             logger.info(f"Full sync completed for project {project_data['id']}")
             return True
