@@ -1,0 +1,3 @@
+## 2024-05-24 - API Connection Pooling Bottleneck
+**Learning:** Making external API calls (DeepL, OpenAI) inside a batch process without reusing client instances causes severe performance degradation due to repeated TLS handshakes for every translation request. Asyncio event loop thread-safety issues prevent caching async clients across the app's short-lived WorkerThreads, but synchronous clients like `requests.Session` and `openai.OpenAI` are safe and critical to pool.
+**Action:** Always implement connection pooling using `requests.Session()` or reusable synchronous client instances when making repetitive external API calls in this architecture to bypass TLS overhead while avoiding event-loop thread constraints.
