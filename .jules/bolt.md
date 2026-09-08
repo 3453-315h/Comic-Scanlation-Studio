@@ -1,0 +1,3 @@
+## 2024-06-12 - Cache External API Clients
+**Learning:** Recreating connection-based clients like requests for DeepL and OpenAI's client for every API call causes massive overhead due to repeated TLS handshakes during batch translation tasks. However, asyncio-dependent clients (like googletrans) cannot be safely pooled here because translations run inside short-lived WorkerThread instances, meaning each task creates a new asyncio event loop which would crash if caching an asyncio client across threads.
+**Action:** Always cache synchronous clients (like requests.Session or OpenAI) to prevent N+1 connection bottlenecks, but lazily instantiate asyncio-based clients per task or use thread-local storage when dealing with worker threads.
