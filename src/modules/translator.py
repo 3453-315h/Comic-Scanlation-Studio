@@ -75,6 +75,10 @@ class Translator:
         self._opus_model = None
         self._opus_tokenizer = None
         
+        # Connection pooling
+        self._session = None
+        self._openai_client = None
+
         if api == "deepl":
             from dotenv import load_dotenv
             import os
@@ -232,6 +236,9 @@ class Translator:
         """Use DeepL API"""
         if not self.api_key:
             return text
+
+        if self._session is None:
+            self._session = requests.Session()
         
         try:
             url = "https://api-free.deepl.com/v2/translate"
@@ -241,7 +248,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params)
+            response = self._session.post(url, data=params)
             return response.json()["translations"][0]["text"]
         except Exception as e:
             logger.error(f"DeepL error: {e}")
@@ -251,11 +258,12 @@ class Translator:
         """Use OpenAI GPT for contextual translation"""
         if not self.api_key:
             return text
-        
-        try:
-            from openai import OpenAI
-            client = OpenAI(api_key=self.api_key)
             
+        try:
+            if self._openai_client is None:
+                from openai import OpenAI
+                self._openai_client = OpenAI(api_key=self.api_key)
+
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
             Maintain the tone and style appropriate for comics.
             Context: {context or 'No context provided'}
@@ -264,7 +272,7 @@ class Translator:
             
             Translation:"""
             
-            response = client.chat.completions.create(
+            response = self._openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=500
