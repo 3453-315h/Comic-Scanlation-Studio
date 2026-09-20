@@ -1,0 +1,3 @@
+## 2024-09-20 - Connection Pooling for External API Translations
+**Learning:** Re-instantiating HTTP clients (like `requests` or `openai.OpenAI`) per translation causes repeated TLS handshakes, introducing significant latency in batch translation loops. However, because translations run in worker threads with short-lived event loops, caching asynchronous clients (like `googletrans.Translator`) can cause cross-thread event loop issues.
+**Action:** Always reuse synchronous clients (`requests.Session`, `OpenAI`) across tasks within instances to eliminate connection overhead without risking async thread-safety issues.
