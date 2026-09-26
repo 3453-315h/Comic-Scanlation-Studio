@@ -1,0 +1,3 @@
+## 2025-02-28 - Missing Accessible Names on Emoji-Containing Buttons
+**Learning:** PySide6 widgets that use emojis in their visible text (e.g., `QPushButton("🔍 Detect Speech Bubbles")`) or as pure icons (e.g., `QPushButton("➖")`) need proper accessible names (`setAccessibleName`) to ensure screen readers read them correctly without vocalizing confusing emoji names.
+**Action:** Identify buttons with emojis and set their accessible names using `setAccessibleName()`, stripping out emojis or providing a descriptive label, while also preserving existing tooltips or adding them if missing to assist visually impaired users or those who need additional context.
