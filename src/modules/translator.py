@@ -42,6 +42,11 @@ class UnsupportedBackendError(TranslationError):
     pass
 
 
+class CacheLockError(TranslationError):
+    """Raised when acquiring or releasing inter-process cache lock fails."""
+    pass
+
+
 class TranslationCache:
     """Thread-safe and process-safe persistent translation cache with atomic writes."""
     
@@ -59,21 +64,55 @@ class TranslationCache:
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
         self._reload_from_disk()
 
-    def _acquire_file_lock(self):
-        lock_fd = os.open(str(self.lock_file), os.O_CREAT | os.O_RDWR)
+    def _acquire_file_lock(self) -> int:
+        """Acquire an exclusive cross-process lock portably on Windows and POSIX."""
+        import sys
         try:
-            import fcntl
-            fcntl.flock(lock_fd, fcntl.LOCK_EX)
-        except Exception:
-            pass
+            lock_fd = os.open(str(self.lock_file), os.O_CREAT | os.O_RDWR)
+        except Exception as e:
+            raise CacheLockError(f"Could not open lock file {self.lock_file}: {e}") from e
+
+        if sys.platform == "win32":
+            try:
+                import msvcrt
+                os.lseek(lock_fd, 0, os.SEEK_SET)
+                msvcrt.locking(lock_fd, msvcrt.LK_LOCK, 1)
+            except Exception as e:
+                try:
+                    os.close(lock_fd)
+                except Exception:
+                    pass
+                raise CacheLockError(f"Windows file locking failed for {self.lock_file}: {e}") from e
+        else:
+            try:
+                import fcntl
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            except Exception as e:
+                try:
+                    os.close(lock_fd)
+                except Exception:
+                    pass
+                raise CacheLockError(f"POSIX file locking failed for {self.lock_file}: {e}") from e
+
         return lock_fd
 
-    def _release_file_lock(self, lock_fd):
+    def _release_file_lock(self, lock_fd: int):
+        """Release the cross-process lock portably on Windows and POSIX."""
+        import sys
         try:
-            import fcntl
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
-        except Exception:
-            pass
+            if sys.platform == "win32":
+                try:
+                    import msvcrt
+                    os.lseek(lock_fd, 0, os.SEEK_SET)
+                    msvcrt.locking(lock_fd, msvcrt.LK_UNLCK, 1)
+                except Exception as e:
+                    logger.warning(f"Error unlocking Windows lock file: {e}")
+            else:
+                try:
+                    import fcntl
+                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                except Exception as e:
+                    logger.warning(f"Error unlocking POSIX lock file: {e}")
         finally:
             try:
                 os.close(lock_fd)
@@ -101,7 +140,12 @@ class TranslationCache:
 
     def set(self, key: str, value: str):
         with self._thread_lock:
-            lock_fd = self._acquire_file_lock()
+            try:
+                lock_fd = self._acquire_file_lock()
+            except CacheLockError as e:
+                logger.error(f"Failed to acquire file lock for cache persistence: {e}")
+                self._in_memory[key] = value
+                raise
             try:
                 current_disk = {}
                 if self.cache_file.exists():

@@ -25,7 +25,8 @@ except ImportError:
 from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import (
     QImage, QPainter, QFont, QFontMetrics, QColor, QPen, QFontDatabase,
-    QTextDocument, QTextOption, QAbstractTextDocumentLayout, QTextLayout
+    QTextDocument, QTextOption, QAbstractTextDocumentLayout, QTextLayout,
+    QGuiApplication
 )
 
 logger = logging.getLogger(__name__)
@@ -423,11 +424,12 @@ class TextImprinter:
         """
         # 1. Choose Font
         chosen_font = self.default_style.font_family
-        available_families = QFontDatabase.families()
-        for font in self.COMIC_FONTS:
-            if font in available_families:
-                chosen_font = font
-                break
+        if QGuiApplication.instance() is not None:
+            available_families = QFontDatabase.families()
+            for font in self.COMIC_FONTS:
+                if font in available_families:
+                    chosen_font = font
+                    break
         
         # 2. Detect Color (Black or White text?)
         text_color = (0, 0, 0) # Default Black

@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=7.0.0
+pytest-qt>=4.2.0
+pytest-mock>=3.10.0

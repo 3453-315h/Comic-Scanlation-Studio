@@ -286,7 +286,9 @@ VERIFIED_DETECTOR_MODELS = {
     "comic-speech-bubble-detector.pt": {
         "url": "https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m/resolve/main/comic-speech-bubble-detector.pt",
         "min_size": 10_000_000,
-        "description": "Specialized Comic Speech Bubble Detector (YOLOv8m)"
+        "description": "Specialized Comic Speech Bubble Detector (YOLOv8m) [unverified download - SHA-256 not pinned]",
+        "sha256": None,
+        "trusted": False,
     }
 }
 
@@ -297,9 +299,13 @@ def acquire_detector_model(
     timeout: int = 60,
     url: Optional[str] = None,
     target_path: Optional[Path] = None,
-    min_size: Optional[int] = None
+    min_size: Optional[int] = None,
+    expected_sha256: Optional[str] = None,
+    allow_unverified: bool = True,
 ) -> Path:
-    """Explicit, verified source and atomic download with bounded timeout, HTTP/status/error handling and an integrity/validity check."""
+    """Explicit, verified source and atomic download with bounded timeout, HTTP/status/error handling,
+    SHA-256 integrity check, and preservation of any known-good installed model."""
+    import hashlib
     import os
     import time
     import requests
@@ -308,10 +314,12 @@ def acquire_detector_model(
     if url is not None:
         info_url = url
         info_min_size = min_size if min_size is not None else 100
+        info_sha256 = expected_sha256
     elif model_name in VERIFIED_DETECTOR_MODELS:
         info = VERIFIED_DETECTOR_MODELS[model_name]
         info_url = info["url"]
         info_min_size = min_size if min_size is not None else info["min_size"]
+        info_sha256 = expected_sha256 if expected_sha256 is not None else info.get("sha256")
     else:
         raise ModelAcquisitionError(
             f"Model '{model_name}' is not in the verified detector registry. "
@@ -324,11 +332,33 @@ def acquire_detector_model(
     else:
         dest_dir = target_dir or (Config.MODELS_DIR / "yolo")
         dest_file = dest_dir / model_name
-        
+
+    # If a valid existing model already exists, preserve it and do not overwrite
+    if dest_file.exists():
+        try:
+            curr_size = dest_file.stat().st_size
+            if curr_size >= info_min_size:
+                with open(dest_file, "rb") as f:
+                    hdr = f.read(512)
+                if b"<html" not in hdr.lower() and b"<!doctype html" not in hdr.lower():
+                    if info_sha256:
+                        hasher = hashlib.sha256()
+                        with open(dest_file, "rb") as f:
+                            for chunk in iter(lambda: f.read(65536), b""):
+                                hasher.update(chunk)
+                        if hasher.hexdigest().lower() == info_sha256.lower():
+                            logger.info(f"Existing verified model matches SHA-256: {dest_file}")
+                            return dest_file
+                    else:
+                        logger.info(f"Existing model already present and valid: {dest_file}")
+                        return dest_file
+        except Exception:
+            pass
+
     dest_dir.mkdir(parents=True, exist_ok=True)
     temp_file = dest_dir / f"{dest_file.name}.tmp.{int(time.time() * 1000)}"
 
-    logger.info(f"Downloading verified model from {info_url} to {dest_file}...")
+    logger.info(f"Downloading model from {info_url} to {dest_file}...")
     try:
         response = requests.get(info_url, stream=True, timeout=timeout)
         if response.status_code != 200:
@@ -342,10 +372,12 @@ def acquire_detector_model(
             )
 
         downloaded = 0
+        hasher = hashlib.sha256()
         with open(temp_file, "wb") as f:
             for chunk in response.iter_content(chunk_size=16384):
                 if chunk:
                     f.write(chunk)
+                    hasher.update(chunk)
                     downloaded += len(chunk)
             f.flush()
             os.fsync(f.fileno())
@@ -360,8 +392,22 @@ def acquire_detector_model(
             if b"<html" in header.lower() or b"<!doctype html" in header.lower():
                 raise ModelAcquisitionError("Downloaded file appears to be an HTML error page rather than model weights.")
 
+        # SHA-256 integrity check
+        actual_sha256 = hasher.hexdigest().lower()
+        if info_sha256:
+            if actual_sha256 != info_sha256.lower():
+                raise ModelAcquisitionError(
+                    f"Integrity check failed for {dest_file.name}: expected SHA-256 {info_sha256.lower()}, got {actual_sha256}"
+                )
+        elif not allow_unverified:
+            raise ModelAcquisitionError(
+                f"Model download rejected: '{dest_file.name}' has no pinned SHA-256 digest "
+                f"and allow_unverified is False. Explicit verification is required before loading executable model weights."
+            )
+
+        # Atomic replacement: replaces dest_file only after full verification
         temp_file.replace(dest_file)
-        logger.info(f"Successfully acquired and verified model at {dest_file}")
+        logger.info(f"Successfully acquired and verified model at {dest_file} (SHA-256: {actual_sha256[:12]}...)")
         return dest_file
 
     except Exception as e:
@@ -386,8 +432,10 @@ class YOLOTextDetector(TextDetector):
         detector = YOLOTextDetector("manga-text-detector.pt")  # Use custom
     """
     
-    def __init__(self, model_path: str = "yolov8n.pt", confidence_threshold: float = None, auto_acquire: bool = True, auto_download: bool = True):
+    def __init__(self, model_path: str = "yolov8n.pt", confidence_threshold: float = None, auto_acquire: bool = True, auto_download: bool = True, device: Optional[str] = None):
         super().__init__(model_name="YOLO")
+        if device is not None:
+            self.device = device
         
         # Import config to get default if not provided
         from ..core.config import Config

@@ -798,13 +798,18 @@ class MainWindow(QMainWindow):
         
         self.image_viewer.display_bubbles(page.bubbles)
         self.editor_panel.update_button_status("ocr", ocr_count)
-        status_msg = f"OCR complete: {ocr_count} texts extracted"
-        if empty_count > 0:
-            status_msg += f", {empty_count} empty"
         if failed_count > 0:
-            status_msg += f", {failed_count} failed"
-        self.editor_panel.set_status(status_msg)
-        self.statusbar.showMessage(status_msg)
+            first_err = next(iter(errors.values()), "Unknown error")
+            status_msg = f"OCR finished with failures: {ocr_count} texts extracted, {failed_count} failed ({first_err})"
+            self.editor_panel.set_status(status_msg)
+            self.statusbar.showMessage(status_msg)
+            QMessageBox.warning(self, "OCR Errors", f"OCR failed for {failed_count} bubble(s):\n{first_err}")
+        else:
+            status_msg = f"OCR complete: {ocr_count} texts extracted"
+            if empty_count > 0:
+                status_msg += f", {empty_count} empty"
+            self.editor_panel.set_status(status_msg)
+            self.statusbar.showMessage(status_msg)
         
         self.project.save(self.config.PROJECTS_DIR)
         self.save_state("Perform OCR")
@@ -903,11 +908,16 @@ class MainWindow(QMainWindow):
                 
         self.image_viewer.display_bubbles(page.bubbles)
         self.editor_panel.update_button_status("translate", trans_count)
-        status_msg = f"Translated {trans_count} texts"
         if failed_count > 0:
-            status_msg += f", {failed_count} failed"
-        self.editor_panel.set_status(status_msg)
-        self.statusbar.showMessage(status_msg)
+            first_err = next(iter(errors.values()), "Unknown error")
+            status_msg = f"Translation finished with failures: {trans_count} translated, {failed_count} failed ({first_err})"
+            self.editor_panel.set_status(status_msg)
+            self.statusbar.showMessage(status_msg)
+            QMessageBox.warning(self, "Translation Errors", f"Translation failed for {failed_count} bubble(s):\n{first_err}")
+        else:
+            status_msg = f"Translated {trans_count} texts"
+            self.editor_panel.set_status(status_msg)
+            self.statusbar.showMessage(status_msg)
         self.project.save(self.config.PROJECTS_DIR)
         self.save_state("Translate All")
     
@@ -1243,9 +1253,11 @@ class MainWindow(QMainWindow):
         # But let's be safe.
         page = self.image_viewer.current_page
         if processed_page and processed_page.id == page.id:
-             # Merge/Update
              page.bubbles = processed_page.bubbles
              page.processed_image_path = processed_page.processed_image_path
+             page.status = getattr(processed_page, 'status', 'success')
+             page.error = getattr(processed_page, 'error', None)
+             page.error_details = getattr(processed_page, 'error_details', [])
         
         self.image_viewer.display_bubbles(page.bubbles)
         
@@ -1253,8 +1265,29 @@ class MainWindow(QMainWindow):
             self.image_viewer.load_image(page.processed_image_path)
         
         self.editor_panel.set_progress(-1)
-        self.editor_panel.set_status("All stages complete!")
-        self.statusbar.showMessage("Processing complete")
+        
+        p_status = getattr(processed_page, 'status', 'success')
+        err_details = getattr(processed_page, 'error_details', [])
+        err_msg = getattr(processed_page, 'error', None)
+        first_err = err_details[0] if err_details else err_msg
+
+        if p_status == "failed":
+            status_text = f"Process All failed: {first_err or 'All bubbles failed'}"
+            self.editor_panel.set_status(status_text)
+            self.statusbar.showMessage(status_text)
+            QMessageBox.critical(self, "Process All Failed", status_text)
+        elif p_status == "partial":
+            trans_cnt = getattr(processed_page, 'translated_bubbles_count', sum(1 for b in page.bubbles if b.status == 'translated'))
+            fail_cnt = getattr(processed_page, 'failed_bubbles_count', sum(1 for b in page.bubbles if b.status == 'failed'))
+            status_text = f"Process All partial: {trans_cnt} translated, {fail_cnt} failed ({first_err})"
+            self.editor_panel.set_status(status_text)
+            self.statusbar.showMessage(status_text)
+            QMessageBox.warning(self, "Process All Partial", status_text)
+        else:
+            trans_cnt = getattr(processed_page, 'translated_bubbles_count', len(page.bubbles))
+            status_text = f"All stages complete: {trans_cnt} bubbles translated"
+            self.editor_panel.set_status(status_text)
+            self.statusbar.showMessage("Processing complete")
         
         self.project.save(self.config.PROJECTS_DIR)
     
@@ -1358,14 +1391,23 @@ class MainWindow(QMainWindow):
     def _on_batch_complete(self, results):
         """Batch processing finished"""
         results = results or []
-        success_count = sum(1 for p in results if getattr(p, 'status', None) != "failed")
-        failure_count = sum(1 for p in results if getattr(p, 'status', None) == "failed")
+        if hasattr(results, 'outcomes'):
+            success_count = results.success_count
+            partial_count = results.partial_count
+            failure_count = results.failure_count
+        else:
+            success_count = sum(1 for p in results if getattr(p, 'status', None) not in ("failed", "partial"))
+            partial_count = sum(1 for p in results if getattr(p, 'status', None) == "partial")
+            failure_count = sum(1 for p in results if getattr(p, 'status', None) == "failed")
         total_count = len(results)
 
-        status_msg = f"Batch complete: {success_count}/{total_count} succeeded"
+        status_parts = [f"{success_count}/{total_count} succeeded"]
+        if partial_count > 0:
+            status_parts.append(f"{partial_count} partial")
         if failure_count > 0:
-            status_msg += f", {failure_count} failed"
+            status_parts.append(f"{failure_count} failed")
 
+        status_msg = f"Batch complete: {', '.join(status_parts)}"
         self.statusbar.showMessage(status_msg)
         self.editor_panel.set_status(status_msg)
         self.editor_panel.setEnabled(True)
@@ -1381,11 +1423,11 @@ class MainWindow(QMainWindow):
                 current_page = self.project.pages[current_page.id]
             self._load_page(current_page)
             
-        if failure_count > 0:
+        if failure_count > 0 or partial_count > 0:
             QMessageBox.warning(
                 self, 
-                "Batch Complete with Errors", 
-                f"Batch finished: {success_count} succeeded, {failure_count} failed."
+                "Batch Complete with Issues", 
+                f"Batch finished: {success_count} succeeded, {partial_count} partial, {failure_count} failed."
             )
         else:
             QMessageBox.information(

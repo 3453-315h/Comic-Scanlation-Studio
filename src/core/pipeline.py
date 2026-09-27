@@ -212,6 +212,7 @@ class ScanlationPipeline:
         # ---------------------------------------------------------------------
         logger.info(f"[2/5] Performing OCR on {len(bubbles)} bubbles")
         _emit(f"[2/5] Performing OCR on {len(bubbles)} bubbles", 40)
+        stage_errors = []
         for bubble in bubbles:
             try:
                 text = self.ocr.recognize(image, bubble.bbox)
@@ -224,7 +225,9 @@ class ScanlationPipeline:
                     bubble.confidence = 0.0
                     bubble.status = "ocr_empty"
             except Exception as e:
-                logger.error(f"OCR failed for bubble {bubble.id}: {e}")
+                err_msg = f"OCR failed for bubble {bubble.id}: {e}"
+                logger.error(err_msg)
+                stage_errors.append(err_msg)
                 bubble.text_original = ""
                 bubble.confidence = 0.0
                 bubble.status = "failed"
@@ -244,7 +247,9 @@ class ScanlationPipeline:
                     )
                     bubble.status = "translated"
                 except Exception as e:
-                    logger.error(f"Translation failed for bubble {bubble.id}: {e}")
+                    err_msg = f"Translation failed for bubble {bubble.id}: {e}"
+                    logger.error(err_msg)
+                    stage_errors.append(err_msg)
                     bubble.status = "failed"
                     bubble.text_translated = None
 
@@ -327,8 +332,28 @@ class ScanlationPipeline:
         page.processed_image_path = Path(page.file_path).parent / f"{page.id}{output_suffix}.png"
         save_image(final_image, page.processed_image_path)
 
-        # Attach bubbles to the page and return
+        # Attach bubbles to the page and update outcome metrics
         page.bubbles = bubbles
+        failed_bubbles = [b for b in bubbles if b.status == "failed"]
+        translated_bubbles = [b for b in bubbles if b.status == "translated"]
+        empty_bubbles = [b for b in bubbles if b.status == "ocr_empty"]
+
+        page.total_bubbles_count = len(bubbles)
+        page.translated_bubbles_count = len(translated_bubbles)
+        page.failed_bubbles_count = len(failed_bubbles)
+        page.empty_bubbles_count = len(empty_bubbles)
+        page.error_details = stage_errors
+
+        if len(bubbles) > 0 and len(failed_bubbles) == len(bubbles):
+            page.status = "failed"
+            page.error = "; ".join(stage_errors) if stage_errors else "All bubbles failed processing"
+        elif len(failed_bubbles) > 0:
+            page.status = "partial"
+            page.error = "; ".join(stage_errors)
+        else:
+            page.status = "success"
+            page.error = None
+
         _emit("Processing complete", 100)
         return page
 
