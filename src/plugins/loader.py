@@ -217,6 +217,7 @@ class WasmPluginLoader:
                     all_logs.append(f"Built-in plugin error: {e}")
         
         # Call Wasm plugins (if available)
+        overall_success = True
         if WASMTIME_AVAILABLE:
             for name, metadata in self.plugins.items():
                 if hook in metadata.hooks:
@@ -224,28 +225,31 @@ class WasmPluginLoader:
                         plugin_result = self._execute_wasm_plugin(metadata, context)
                         if plugin_result.success:
                             result_data.update(plugin_result.data)
+                        else:
+                            overall_success = False
                         all_logs.extend(plugin_result.logs)
                     except Exception as e:
+                        overall_success = False
                         all_logs.append(f"Plugin {name} error: {e}")
         
         return PluginResult(
-            success=True,
+            success=overall_success,
             data=result_data,
             logs=all_logs
         )
     
     def _execute_wasm_plugin(self, metadata: PluginMetadata, context: PluginContext) -> PluginResult:
-        """Execute a Wasm plugin with the given context"""
-        # In a full implementation, this would:
-        # 1. Serialize context to a format the Wasm plugin understands
-        # 2. Call the plugin's exported handle_hook function
-        # 3. Deserialize the result
+        """Execute a Wasm plugin with the given context.
         
-        # For now, return a placeholder result
+        Wasm plugin execution is currently unsupported and disabled to prevent
+        untrusted execution without verified memory and capability sandboxing.
+        """
+        msg = f"Wasm plugin '{metadata.name}' execution is unsupported: sandboxed runtime not implemented."
+        logger.warning(msg)
         return PluginResult(
-            success=True,
+            success=False,
             data=context.data,
-            logs=[f"Wasm plugin {metadata.name} executed (placeholder)"]
+            logs=[msg]
         )
     
     def register_builtin(self, plugin: Any) -> None:

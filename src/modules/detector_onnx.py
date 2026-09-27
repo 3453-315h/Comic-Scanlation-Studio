@@ -10,6 +10,11 @@ from ..core.config import Config
 
 logger = logging.getLogger(__name__)
 
+class DirectMLError(RuntimeError):
+    """Raised when DirectML execution provider is unavailable or fails to initialize."""
+    pass
+
+
 class ONNXTextDetector(YOLOTextDetector):
     """
     ONNX Runtime implementation of YOLO text detector.
@@ -19,76 +24,91 @@ class ONNXTextDetector(YOLOTextDetector):
     Supports DirectML for AMD/Intel GPUs on Windows.
     """
     
-    def __init__(self, model_path: str = "yolov8n.pt", confidence_threshold: float = None):
-        # We don't call super().__init__ immediately because we need to handle the export first
-        # But we need basic setup.
-        
+    def __init__(self, model_path: str = "yolov8n.pt", confidence_threshold: float = None, device: Optional[str] = None):
         self.model_name = "YOLO-ONNX"
+        from ..core.config import Config
         self.confidence_threshold = confidence_threshold if confidence_threshold is not None else Config.YOLO_CONFIDENCE
-        
-        # Get device setting
-        self.device_setting = getattr(Config, 'AI_DEVICE', 'auto')
-        
-        # Resolve model path (source .pt)
-        # We reuse the logic from YOLOTextDetector to find the .pt file
-        # But we can't use super()._load_model() directly yet because it loads .pt
-        
-        # Let's use a temporary instance or static method logic? 
-        # Easier: Just initialize super, then switch model.
-        # But loading .pt might be slow/wasteful if we already have .onnx.
-        
-        # Better: Re-implement path finding or extract it.
-        # For now, let's just use the super class to find the path, knowing it might load the PT model.
-        # Optimization: We check if .onnx exists FIRST.
+        self.device = device or getattr(Config, 'AI_DEVICE', 'auto')
+        self.device_setting = self.device
+        self.providers = ['CPUExecutionProvider']
+        self.active_provider = 'CPUExecutionProvider'
+        self.active_providers = self.providers
+        self.session = None
         
         self.base_model_path = model_path
         self.onnx_path = self._get_onnx_path(model_path)
         
-        if self.onnx_path and self.onnx_path.exists():
-            logger.info(f"Found ONNX model: {self.onnx_path}")
-            super().__init__(str(self.onnx_path), confidence_threshold)
-            # Configure DirectML if needed
-            self._configure_onnx_providers()
-        else:
-            logger.info(f"ONNX model not found for {model_path}. Loading PT to export...")
-            # Load PT
-            super().__init__(model_path, confidence_threshold)
-            
-            # Export
-            self._export_to_onnx()
-            
-            # Re-load as ONNX
-            # Ultralytics model object can be replaced
+        try:
             if self.onnx_path and self.onnx_path.exists():
-                 logger.info(f"Reloading with ONNX model: {self.onnx_path}")
-                 try:
-                     from ultralytics import YOLO
-                     self.model = YOLO(str(self.onnx_path), task='detect')
-                     self._configure_onnx_providers()
-                 except ImportError:
-                     logger.error("ultralytics not installed")
-    
-    def _configure_onnx_providers(self):
+                logger.info(f"Found ONNX model: {self.onnx_path}")
+                super().__init__(str(self.onnx_path), confidence_threshold, auto_acquire=False)
+            else:
+                logger.info(f"ONNX model not found for {model_path}. Loading PT to export...")
+                super().__init__(model_path, confidence_threshold, auto_acquire=False)
+                self._export_to_onnx()
+        except RuntimeError as e:
+            if "ultralytics" in str(e).lower():
+                logger.info("ultralytics not installed; using ONNX Runtime direct session")
+                self.model = None
+            else:
+                raise
+        except Exception as e:
+            logger.info(f"Base model init exception in ONNXTextDetector: {e}")
+            self.model = None
+
+        self.device = device or getattr(Config, 'AI_DEVICE', 'auto')
+        self.device_setting = self.device
+        self._configure_onnx_providers()
+
+    def _configure_onnx_providers(self, device_override: Optional[str] = None):
         """Configure ONNX Runtime execution providers based on AI_DEVICE setting."""
-        if self.device_setting != 'directml':
-            return  # Use default providers
+        device = device_override or self.device_setting
+        if str(device).lower() != 'directml':
+            self.providers = ['CPUExecutionProvider']
+            self.active_provider = 'CPUExecutionProvider'
+            self.active_providers = self.providers
+            return self.providers
             
         try:
             import onnxruntime as ort
-            
-            # Check if DirectML is available
-            available_providers = ort.get_available_providers()
-            logger.info(f"Available ONNX providers: {available_providers}")
-            
-            if 'DmlExecutionProvider' in available_providers:
-                logger.info("DirectML provider available - AMD/Intel GPU acceleration enabled")
-                # Ultralytics uses its own session, but we log availability
-                # For direct ONNX usage, set providers order
-            else:
-                logger.warning("DirectML requested but not available. Install onnxruntime-directml.")
-                
         except ImportError:
-            logger.warning("onnxruntime not installed. DirectML unavailable.")
+            raise DirectMLError(
+                "DirectML acceleration requested ('AI_DEVICE=directml'), but onnxruntime is not installed. "
+                "Install onnxruntime-directml on Windows to use DirectML."
+            )
+            
+        available_providers = ort.get_available_providers()
+        logger.info(f"Available ONNX providers: {available_providers}")
+        
+        if 'DmlExecutionProvider' not in available_providers:
+            raise DirectMLError(
+                f"DirectML acceleration requested ('AI_DEVICE=directml'), but 'DmlExecutionProvider' is not available "
+                f"in onnxruntime (available: {available_providers}). "
+                f"DirectML requires onnxruntime-directml on a supported Windows system with a compatible GPU. "
+                f"Never label a CPU run DirectML."
+            )
+            
+        self.providers = ['DmlExecutionProvider', 'CPUExecutionProvider']
+        self.active_providers = self.providers
+        
+        if self.onnx_path and self.onnx_path.exists():
+            session = ort.InferenceSession(str(self.onnx_path), providers=self.providers)
+            actual = session.get_providers()
+            if 'DmlExecutionProvider' not in actual:
+                raise DirectMLError(
+                    f"DirectML requested, but ONNX Runtime fell back to {actual}. "
+                    "Cannot label a CPU fallback as DirectML execution."
+                )
+            self.session = session
+            self.active_provider = 'DmlExecutionProvider'
+            if hasattr(self, 'model') and self.model is not None:
+                if hasattr(self.model, 'model') and hasattr(self.model.model, 'session'):
+                    self.model.model.session = session
+                elif hasattr(self.model, 'predictor') and hasattr(self.model.predictor, 'model') and hasattr(self.model.predictor.model, 'session'):
+                    self.model.predictor.model.session = session
+        else:
+            self.active_provider = 'DmlExecutionProvider'
+        return self.providers
     
     def _get_onnx_path(self, pt_path: str) -> Optional[Path]:
         """Derive ONNX path from PT path"""
@@ -153,8 +173,17 @@ class ONNXTextDetector(YOLOTextDetector):
             
     def detect(self, image: np.ndarray, ignore_sfx: bool = True) -> List:
         """Run detection (Same as parent, but logging timing for benchmark)"""
+        if self.model is None:
+            raise RuntimeError(
+                "ONNX text detector model is not loaded. Cannot perform detection. "
+                "Please acquire the model or select 'opencv' detector explicitly."
+            )
         start_t = time.time()
         results = super().detect(image, ignore_sfx)
         dt = time.time() - start_t
         logger.debug(f"ONNX Detection time: {dt:.3f}s")
         return results
+
+# Convenience alias
+YOLOONNXDetector = ONNXTextDetector
+

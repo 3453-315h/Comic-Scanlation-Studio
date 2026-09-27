@@ -86,13 +86,14 @@ class BatchProcessDialog(QDialog):
         
     def load_pages(self):
         self.page_list.clear()
-        for page in self.project.pages:
+        pages = self.project.pages.values() if isinstance(self.project.pages, dict) else self.project.pages
+        for page in pages:
             filename = page.file_path.name if hasattr(page.file_path, 'name') else str(page.file_path)
             item = QListWidgetItem(f"Page {page.id}: {filename}")
             item.setData(Qt.UserRole, page.id)
             # Pre-select all
-            item.setSelected(True)
             self.page_list.addItem(item)
+            item.setSelected(True)
             
     def select_all(self):
         for i in range(self.page_list.count()):
@@ -112,7 +113,8 @@ class BatchProcessDialog(QDialog):
             return
             
         page_ids = [item.data(Qt.UserRole) for item in selected_items]
-        self.pages_to_process = [p for p in self.project.pages if p.id in page_ids]
+        pages_dict = self.project.pages if isinstance(self.project.pages, dict) else {p.id: p for p in self.project.pages}
+        self.pages_to_process = [pages_dict[pid] for pid in page_ids if pid in pages_dict]
         
         # Lock UI
         self.is_running = True
@@ -135,9 +137,10 @@ class BatchProcessDialog(QDialog):
     def get_config(self):
         # Ensure pages_to_process is populated if not already
         if not hasattr(self, 'pages_to_process'):
-             selected_items = self.page_list.selectedItems()
-             page_ids = [item.data(Qt.UserRole) for item in selected_items]
-             self.pages_to_process = [p for p in self.project.pages if p.id in page_ids]
+            selected_items = self.page_list.selectedItems()
+            page_ids = [item.data(Qt.UserRole) for item in selected_items]
+            pages_dict = self.project.pages if isinstance(self.project.pages, dict) else {p.id: p for p in self.project.pages}
+            self.pages_to_process = [pages_dict[pid] for pid in page_ids if pid in pages_dict]
              
         return {
             "pages": self.pages_to_process,

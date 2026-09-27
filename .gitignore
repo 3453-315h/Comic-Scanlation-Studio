@@ -46,7 +46,8 @@ Thumbs.db
 _ARCHIVE/
 bck/
 mask_debug/
-test_*.py
+/test_*.py
+!tests/
 dump_bubbles.py
 version_info.txt
 

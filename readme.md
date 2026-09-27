@@ -53,8 +53,8 @@ Download `Comic Scanlation Studio.exe` from Releases. No installation required.
 ### Option 2: From Source
 ```bash
 # Clone and setup
-git clone https://github.com/your-repo/scanlation-tool.git
-cd scanlation-tool
+git clone https://github.com/3453-315h/Comic-Scanlation-Studio.git
+cd Comic-Scanlation-Studio
 python -m venv venv
 .\venv\Scripts\activate
 
@@ -71,7 +71,7 @@ pip install onnxruntime-directml
 ## 🎮 Usage
 
 ### Quick Start
-1. Run `Comic Scanlation Studio.exe` or `run.bat`
+1. Run `run.bat` or `python -m src.main`
 2. **File > New Project** to create a project
 3. Drag & drop manga pages
 4. Click **Process All** to run the full pipeline
@@ -91,12 +91,5 @@ pip install onnxruntime-directml
 └── config.json       # User settings
 ```
 
-## 🛠️ Build from Source
-```bash
-# Build executable
-.\build.bat
-# Output: dist/Comic Scanlation Studio/
-```
-
 ## 📜 License
-[MIT License](LICENSE)
+All rights reserved. License terms to be confirmed by repository owner.

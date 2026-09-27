@@ -27,6 +27,8 @@ class Config:
     # If frozen, use the folder containing the exe (Portable Mode)
     MODELS_DIR = PORTABLE_DIR / "models"
     PROJECTS_DIR = PORTABLE_DIR / "projects"
+    CACHE_DIR = PORTABLE_DIR / "cache"
+    TRANSLATION_CACHE_FILE = CACHE_DIR / "translation_cache.json"
     CONFIG_FILE = PORTABLE_DIR / "config.json"
     
     # AI Models

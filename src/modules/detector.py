@@ -34,7 +34,7 @@ except ImportError:
 from pathlib import Path
 import cv2
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -51,8 +51,12 @@ class TextDetector:
     4. Contour detection to find text regions
     """
     
-    def __init__(self, model_name: str = "opencv-contour"):
+    def __init__(self, model_name: str = "opencv-contour", backend: Optional[str] = None, model_path: Optional[str] = None):
+        self.backend = backend or "opencv"
         self.model_name = model_name
+        self._yolo = None
+        if self.backend == "yolo":
+            self._yolo = YOLOTextDetector(model_path=model_path or "comic-speech-bubble-detector.pt")
         
         # Determine device from Config with safe CUDA detection
         from ..core.config import Config
@@ -60,9 +64,15 @@ class TextDetector:
         
         if device_setting == "auto":
             self.device = self._safe_detect_device()
+        elif str(device_setting).lower() == "directml":
+            # DirectML is an ONNX Runtime provider (used in YOLO-ONNX). OpenCV detector runs on CPU.
+            self.device = "cpu"
         else:
-            import torch
-            self.device = torch.device(device_setting)
+            try:
+                import torch
+                self.device = torch.device(device_setting)
+            except Exception:
+                self.device = "cpu"
             
         # Detection parameters (tuned for manga)
         self.min_area = 500  # Minimum bubble area in pixels
@@ -78,27 +88,18 @@ class TextDetector:
         In frozen exe builds, CUDA may report as available but actually
         segfault when used. This method actually probes the device.
         """
-        import sys
-        
-        import torch
-        
-        # In frozen exe, default to CPU unless CUDA actually works
         try:
+            import torch
             if torch.cuda.is_available():
-                # Actually try to use CUDA to catch C-level failures
                 _ = torch.zeros(1, device='cuda')
                 logger.info("CUDA device verified and working")
                 return torch.device("cuda")
-        except Exception as e:
-            logger.warning(f"CUDA reported available but failed probe: {e}")
-        
-        try:
             if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 return torch.device("mps")
-        except Exception:
-            pass
-        
-        return torch.device("cpu")
+            return torch.device("cpu")
+        except Exception as e:
+            logger.warning(f"Device probe fallback to cpu: {e}")
+            return "cpu"
     
     def detect(self, image: np.ndarray, ignore_sfx: bool = True) -> List[dict]:
         """Detect text bubbles using robust Edge+Brightness analysis (Robust to panel borders)
@@ -266,6 +267,114 @@ class TextDetector:
         return round(confidence, 3)
 
 
+class DetectorError(RuntimeError):
+    """Base error for detector failures."""
+    pass
+
+
+class ModelNotFoundError(DetectorError, FileNotFoundError):
+    """Raised when a specialized detection model file is not found."""
+    pass
+
+
+class ModelAcquisitionError(DetectorError):
+    """Raised when downloading or validating a model fails."""
+    pass
+
+
+VERIFIED_DETECTOR_MODELS = {
+    "comic-speech-bubble-detector.pt": {
+        "url": "https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m/resolve/main/comic-speech-bubble-detector.pt",
+        "min_size": 10_000_000,
+        "description": "Specialized Comic Speech Bubble Detector (YOLOv8m)"
+    }
+}
+
+
+def acquire_detector_model(
+    model_name: str = "comic-speech-bubble-detector.pt",
+    target_dir: Path | None = None,
+    timeout: int = 60,
+    url: Optional[str] = None,
+    target_path: Optional[Path] = None,
+    min_size: Optional[int] = None
+) -> Path:
+    """Explicit, verified source and atomic download with bounded timeout, HTTP/status/error handling and an integrity/validity check."""
+    import os
+    import time
+    import requests
+    from ..core.config import Config
+
+    if url is not None:
+        info_url = url
+        info_min_size = min_size if min_size is not None else 100
+    elif model_name in VERIFIED_DETECTOR_MODELS:
+        info = VERIFIED_DETECTOR_MODELS[model_name]
+        info_url = info["url"]
+        info_min_size = min_size if min_size is not None else info["min_size"]
+    else:
+        raise ModelAcquisitionError(
+            f"Model '{model_name}' is not in the verified detector registry. "
+            f"Cannot safely auto-download unverified weights."
+        )
+
+    if target_path is not None:
+        dest_file = Path(target_path)
+        dest_dir = dest_file.parent
+    else:
+        dest_dir = target_dir or (Config.MODELS_DIR / "yolo")
+        dest_file = dest_dir / model_name
+        
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    temp_file = dest_dir / f"{dest_file.name}.tmp.{int(time.time() * 1000)}"
+
+    logger.info(f"Downloading verified model from {info_url} to {dest_file}...")
+    try:
+        response = requests.get(info_url, stream=True, timeout=timeout)
+        if response.status_code != 200:
+            raise ModelAcquisitionError(f"HTTP {response.status_code}: Failed to download {info_url}")
+        response.raise_for_status()
+
+        content_length = response.headers.get("content-length")
+        if content_length and int(content_length) < info_min_size:
+            raise ModelAcquisitionError(
+                f"Downloaded content-length ({content_length} bytes) is below expected minimum ({info_min_size} bytes)."
+            )
+
+        downloaded = 0
+        with open(temp_file, "wb") as f:
+            for chunk in response.iter_content(chunk_size=16384):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+            f.flush()
+            os.fsync(f.fileno())
+
+        if downloaded < info_min_size:
+            raise ModelAcquisitionError(
+                f"Downloaded size ({downloaded} bytes) is smaller than required minimum ({info_min_size} bytes)."
+            )
+
+        with open(temp_file, "rb") as f:
+            header = f.read(512)
+            if b"<html" in header.lower() or b"<!doctype html" in header.lower():
+                raise ModelAcquisitionError("Downloaded file appears to be an HTML error page rather than model weights.")
+
+        temp_file.replace(dest_file)
+        logger.info(f"Successfully acquired and verified model at {dest_file}")
+        return dest_file
+
+    except Exception as e:
+        if temp_file.exists():
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass
+        if isinstance(e, ModelAcquisitionError):
+            raise
+        raise ModelAcquisitionError(f"Failed to acquire model: {e}") from e
+
+
 class YOLOTextDetector(TextDetector):
     """YOLO-based text detection using Ultralytics
     
@@ -277,62 +386,67 @@ class YOLOTextDetector(TextDetector):
         detector = YOLOTextDetector("manga-text-detector.pt")  # Use custom
     """
     
-    def __init__(self, model_path: str = "yolov8n.pt", confidence_threshold: float = None):
+    def __init__(self, model_path: str = "yolov8n.pt", confidence_threshold: float = None, auto_acquire: bool = True, auto_download: bool = True):
         super().__init__(model_name="YOLO")
         
         # Import config to get default if not provided
         from ..core.config import Config
         self.confidence_threshold = confidence_threshold if confidence_threshold is not None else Config.YOLO_CONFIDENCE
+        self.auto_acquire = auto_acquire and auto_download
         
         self.model_path = model_path
         self.model = None
         self._load_model()
     
     def _load_model(self):
-        """Load YOLO model from Ultralytics"""
+        """Load YOLO model from Ultralytics with loud failure on missing weights"""
+        model_path_obj = Path(self.model_path)
+        
+        from ..core.config import Config
+        search_paths = [
+            model_path_obj,                                      # Absolute or CWD relative
+            Config.MODELS_DIR / "yolo" / self.model_path,        # User models/yolo
+            Config.MODELS_DIR / self.model_path,                 # User models root
+            Config.BASE_DIR / "models" / "yolo" / self.model_path, # Bundled models
+            Config.BASE_DIR / "_internal" / "models" / "yolo" / self.model_path, # PyInstaller _internal
+        ]
+        
+        found_path = None
+        for p in search_paths:
+            if p.exists():
+                found_path = str(p.resolve())
+                break
+        
+        if not found_path and self.auto_acquire and model_path_obj.name in VERIFIED_DETECTOR_MODELS:
+            try:
+                dest = acquire_detector_model(model_path_obj.name, Config.MODELS_DIR / "yolo")
+                found_path = str(dest.resolve())
+            except Exception as e:
+                logger.error(f"Verified model acquisition failed for '{self.model_path}': {e}")
+                raise ModelNotFoundError(
+                    f"Specialized detector model '{self.model_path}' could not be acquired: {e}\n"
+                    f"To use the specialized detector, download the model via Settings > Manage AI Models,\n"
+                    f"or select the OpenCV detector explicitly by configuring DETECTOR_MODEL='opencv'."
+                ) from e
+        
+        if not found_path:
+            raise ModelNotFoundError(
+                f"Specialized detector model '{self.model_path}' was not found in any search path.\n"
+                f"Please download it via Settings > Manage AI Models or select the OpenCV detector explicitly (DETECTOR_MODEL='opencv')."
+            )
+        
+        self.model_path = found_path
         try:
             from ultralytics import YOLO
-            
-            # Check if model exists in models/yolo/
-            model_path_obj = Path(self.model_path)
-            
-            # Define search paths in order of priority
-            from ..core.config import Config
-            search_paths = [
-                model_path_obj,                                      # Absolute or CWD relative
-                Config.MODELS_DIR / "yolo" / self.model_path,        # User models/yolo
-                Config.MODELS_DIR / self.model_path,                 # User models root
-                Config.BASE_DIR / "models" / "yolo" / self.model_path, # Bundled models
-                Config.BASE_DIR / "_internal" / "models" / "yolo" / self.model_path, # PyInstaller _internal
-                # Path.home() / ".scanlation_tool" / "models" / self.model_path # Global fallback
-            ]
-            
-            found_path = None
-            for p in search_paths:
-                if p.exists():
-                    found_path = str(p.resolve())
-                    break
-            
-            if found_path:
-                self.model_path = found_path
-                logger.info(f"Loading YOLO model from: {self.model_path}")
-                self.model = YOLO(self.model_path)
-                logger.info(f"YOLO model loaded successfully")
-            else:
-                if not str(model_path_obj).endswith(".pt"):
-                     raise FileNotFoundError(f"Model file not found: {self.model_path}")
-                
-                logger.warning(f"Model {self.model_path} not found locally, letting Ultralytics attempt download.")
-                self.model = YOLO(self.model_path)
-
+            logger.info(f"Loading YOLO model from: {self.model_path}")
+            self.model = YOLO(self.model_path)
+            logger.info("YOLO model loaded successfully")
         except ImportError:
-            logger.error(
-                "ultralytics not installed. Install with: pip install ultralytics"
+            raise RuntimeError(
+                "ultralytics is not installed. Install with: pip install ultralytics or select 'opencv' detector."
             )
-            self.model = None  # Don't re-raise — fall back to OpenCV in detect()
         except Exception as e:
-            logger.error(f"Failed to load YOLO model from {self.model_path}: {e}")
-            self.model = None  # Don't re-raise — fall back to OpenCV in detect()
+            raise ModelNotFoundError(f"Failed to load YOLO model from {self.model_path}: {e}") from e
     
     def detect(self, image: np.ndarray, ignore_sfx: bool = True) -> List:
         """Detect text bubbles using YOLO
@@ -347,8 +461,10 @@ class YOLOTextDetector(TextDetector):
         from ..core.project import TextBubble
         
         if self.model is None:
-            logger.warning("YOLO model not loaded, falling back to OpenCV")
-            return super().detect(image, ignore_sfx)
+            raise RuntimeError(
+                "Specialized YOLO detector is not initialized. "
+                "Please acquire the required model or explicitly select the OpenCV detector ('opencv')."
+            )
         
         height, width = image.shape[:2]
         max_dim = max(height, width)

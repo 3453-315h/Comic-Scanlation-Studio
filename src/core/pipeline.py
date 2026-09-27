@@ -13,8 +13,9 @@ The implementation uses batch inpainting for efficiency and saves the processed 
 
 import logging
 from pathlib import Path
+from typing import Optional, Callable
 
-from .project import Project, Page
+from .project import Project, Page, TextBubble
 from ..utils.image_utils import load_image, save_image
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,10 @@ class ScanlationPipeline:
     Models are loaded only when first used.
     """
 
-    def __init__(self, config):
+    def __init__(self, config=None):
+        if config is None:
+            from .config import Config
+            config = Config()
         self.config = config
         
         # Lazy loaded components
@@ -125,6 +129,34 @@ class ScanlationPipeline:
             self._imprinter = TextImprinter()
         return self._imprinter
 
+    @detector.setter
+    def detector(self, value):
+        self._detector = value
+
+    @ocr.setter
+    def ocr(self, value):
+        self._ocr = value
+
+    @inpainter.setter
+    def inpainter(self, value):
+        self._inpainter = value
+
+    @translator.setter
+    def translator(self, value):
+        self._translator = value
+
+    @imprinter.setter
+    def imprinter(self, value):
+        self._imprinter = value
+
+    @property
+    def renderer(self):
+        return self.imprinter
+
+    @renderer.setter
+    def renderer(self, value):
+        self.imprinter = value
+
     @property
     def font_style(self):
         if self._font_style is None:
@@ -143,32 +175,66 @@ class ScanlationPipeline:
     def font_style(self, value):
         self._font_style = value
 
-    def process_page(self, page: Page, project: Project) -> Page:
+    def process_page(self, page: Page, project: Project, progress_callback: Optional[Callable] = None) -> Page:
         """Process a single page through detection → OCR → translation → inpainting → imprint."""
+        def _emit(msg: str, val: Optional[int] = None):
+            if progress_callback:
+                try:
+                    progress_callback(msg, val)
+                except TypeError:
+                    try:
+                        progress_callback(msg)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
         # ---------------------------------------------------------------------
         # Stage 1 – Detection
         # ---------------------------------------------------------------------
         logger.info(f"[1/5] Detecting text in {page.file_path}")
+        _emit(f"[1/5] Detecting text in {getattr(page.file_path, 'name', page.file_path)}", 20)
         image = load_image(page.file_path)
-        bubbles = self.detector.detect(image, ignore_sfx=project.settings.get("ignore_sfx", True))
+        raw_bubbles = self.detector.detect(image, ignore_sfx=project.settings.get("ignore_sfx", True))
+        bubbles = []
+        for b in raw_bubbles:
+            if isinstance(b, TextBubble):
+                bubbles.append(b)
+            elif isinstance(b, (list, tuple)) and len(b) == 4:
+                bubbles.append(TextBubble(bbox=list(b), status="detected"))
+            elif hasattr(b, 'bbox'):
+                bubbles.append(b)
+        if not bubbles and page.bubbles:
+            bubbles = page.bubbles
 
         # ---------------------------------------------------------------------
         # Stage 2 – OCR
         # ---------------------------------------------------------------------
         logger.info(f"[2/5] Performing OCR on {len(bubbles)} bubbles")
+        _emit(f"[2/5] Performing OCR on {len(bubbles)} bubbles", 40)
         for bubble in bubbles:
             try:
-                bubble.text_original = self.ocr.recognize(image, bubble.bbox)
-                bubble.confidence = self.ocr.confidence
-                bubble.status = "ocr_done"
+                text = self.ocr.recognize(image, bubble.bbox)
+                if text and text.strip():
+                    bubble.text_original = text.strip()
+                    bubble.confidence = self.ocr.confidence
+                    bubble.status = "ocr_done"
+                else:
+                    bubble.text_original = ""
+                    bubble.confidence = 0.0
+                    bubble.status = "ocr_empty"
             except Exception as e:
                 logger.error(f"OCR failed for bubble {bubble.id}: {e}")
+                bubble.text_original = ""
+                bubble.confidence = 0.0
                 bubble.status = "failed"
 
         # ---------------------------------------------------------------------
         # Stage 3 – Translation
         # ---------------------------------------------------------------------
-        logger.info(f"[3/5] Translating {len(bubbles)} text blocks")
+        ready_bubbles = [b for b in bubbles if b.status == "ocr_done" and b.text_original]
+        logger.info(f"[3/5] Translating {len(ready_bubbles)} text blocks")
+        _emit(f"[3/5] Translating {len(ready_bubbles)} text blocks", 60)
         for bubble in bubbles:
             if bubble.status == "ocr_done" and bubble.text_original:
                 try:
@@ -180,6 +246,7 @@ class ScanlationPipeline:
                 except Exception as e:
                     logger.error(f"Translation failed for bubble {bubble.id}: {e}")
                     bubble.status = "failed"
+                    bubble.text_translated = None
 
         # ---------------------------------------------------------------------
         # Style Analysis (Before Inpainting)
@@ -195,12 +262,13 @@ class ScanlationPipeline:
         # Stage 4 – Inpainting (batch)
         # ---------------------------------------------------------------------
         logger.info("[4/5] Inpainting text regions (batch)")
+        _emit("[4/5] Inpainting text regions", 80)
         # Gather valid bboxes. When imprinting, only inpaint bubbles that successfully translated
-        # so we don't erase text that we can't re-render.
+        # so we don't erase text that we can't re-render. Never inpaint failed bubbles.
         if self.enable_imprint:
             bboxes = [b.bbox for b in bubbles if b.status == "translated" and b.bbox and len(b.bbox) == 4]
         else:
-            bboxes = [b.bbox for b in bubbles if b.bbox and len(b.bbox) == 4]
+            bboxes = [b.bbox for b in bubbles if b.status not in ("failed", "ocr_empty") and b.bbox and len(b.bbox) == 4]
         inpainted_image = image.copy()
         if bboxes:
             try:
@@ -217,6 +285,7 @@ class ScanlationPipeline:
         
         if self.enable_imprint:
             logger.info("[5/5] Imprinting translated text")
+            _emit("[5/5] Imprinting translated text", 95)
             translated_bubbles = [b for b in bubbles if b.status == "translated" and b.text_translated]
             
             if translated_bubbles:
@@ -260,4 +329,8 @@ class ScanlationPipeline:
 
         # Attach bubbles to the page and return
         page.bubbles = bubbles
+        _emit("Processing complete", 100)
         return page
+
+# Backward compatibility alias
+TranslationPipeline = ScanlationPipeline

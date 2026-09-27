@@ -694,17 +694,20 @@ class MainWindow(QMainWindow):
             
             # Run OCR
             text = self.pipeline.ocr.recognize(image, new_bubble.bbox)
-            if text:
-                new_bubble.text_original = text
+            if text and text.strip():
+                new_bubble.text_original = text.strip()
                 new_bubble.confidence = self.pipeline.ocr.confidence
                 new_bubble.status = "ocr_done"
-                self.statusbar.showMessage(f"Extracted: {text[:20]}...")
+                self.statusbar.showMessage(f"Extracted: {text.strip()[:20]}...")
             else:
+                new_bubble.text_original = ""
+                new_bubble.status = "ocr_empty"
                 self.statusbar.showMessage("No text extracted from new bubble")
                 
         except Exception as e:
             logger.error(f"Auto-OCR failed: {e}")
-            self.statusbar.showMessage("Auto-OCR failed for new bubble")
+            new_bubble.status = "failed"
+            self.statusbar.showMessage(f"Auto-OCR failed: {e}")
         
         # Update display (using save_state for undo functionality first)
         self.save_state("Manual Bubble Creation")
@@ -754,31 +757,54 @@ class MainWindow(QMainWindow):
     def _run_ocr_task(self, image_path, bubbles_data, pipeline):
         image = load_image(image_path)
         results = {}
+        errors = {}
         for b_id, bbox in bubbles_data:
-            text = pipeline.ocr.recognize(image, bbox)
-            conf = pipeline.ocr.confidence
-            results[b_id] = (text, conf)
-        return results
+            try:
+                text = pipeline.ocr.recognize(image, bbox)
+                conf = pipeline.ocr.confidence
+                results[b_id] = (text, conf)
+            except Exception as e:
+                logger.error(f"OCR failed for bubble {b_id}: {e}")
+                errors[b_id] = str(e)
+        return {"results": results, "errors": errors}
 
-    def _on_ocr_complete(self, results):
+    def _on_ocr_complete(self, ocr_data):
         if not self.project or not self.image_viewer.current_page:
             return
         page = self.image_viewer.current_page
         
         self.save_state("Before OCR")
+        results = ocr_data.get("results", {}) if isinstance(ocr_data, dict) else ocr_data
+        errors = ocr_data.get("errors", {}) if isinstance(ocr_data, dict) else {}
+        
         ocr_count = 0
+        empty_count = 0
+        failed_count = 0
         for bubble in page.bubbles:
-            if bubble.id in results:
+            if bubble.id in errors:
+                bubble.status = "failed"
+                failed_count += 1
+            elif bubble.id in results:
                 text, conf = results[bubble.id]
-                bubble.text_original = text
+                clean_text = text.strip() if text else ""
+                bubble.text_original = clean_text
                 bubble.confidence = conf
-                bubble.status = "ocr_done"
-                ocr_count += 1
+                if clean_text:
+                    bubble.status = "ocr_done"
+                    ocr_count += 1
+                else:
+                    bubble.status = "ocr_empty"
+                    empty_count += 1
         
         self.image_viewer.display_bubbles(page.bubbles)
         self.editor_panel.update_button_status("ocr", ocr_count)
-        self.editor_panel.set_status(f"OCR complete: {ocr_count} texts extracted")
-        self.statusbar.showMessage(f"OCR completed on {ocr_count} bubbles")
+        status_msg = f"OCR complete: {ocr_count} texts extracted"
+        if empty_count > 0:
+            status_msg += f", {empty_count} empty"
+        if failed_count > 0:
+            status_msg += f", {failed_count} failed"
+        self.editor_panel.set_status(status_msg)
+        self.statusbar.showMessage(status_msg)
         
         self.project.save(self.config.PROJECTS_DIR)
         self.save_state("Perform OCR")
@@ -845,31 +871,43 @@ class MainWindow(QMainWindow):
 
     def _run_translation_task(self, texts_map, context, pipeline):
         results = {}
+        errors = {}
         for b_id, text in texts_map.items():
             try:
                 translated = pipeline.translator.translate(text, context=context)
                 results[b_id] = translated
             except Exception as e:
                 logger.error(f"Translation failed for {b_id}: {e}")
-        return results
+                errors[b_id] = str(e)
+        return {"results": results, "errors": errors}
 
-    def _on_translation_complete(self, results):
+    def _on_translation_complete(self, trans_data):
         if not self.project or not self.image_viewer.current_page:
             return
         page = self.image_viewer.current_page
         
         self.save_state("Before Translation")
+        results = trans_data.get("results", {}) if isinstance(trans_data, dict) else trans_data
+        errors = trans_data.get("errors", {}) if isinstance(trans_data, dict) else {}
+        
         trans_count = 0
+        failed_count = 0
         for bubble in page.bubbles:
-            if bubble.id in results:
+            if bubble.id in errors:
+                bubble.status = "failed"
+                failed_count += 1
+            elif bubble.id in results:
                 bubble.text_translated = results[bubble.id]
                 bubble.status = "translated"
                 trans_count += 1
                 
         self.image_viewer.display_bubbles(page.bubbles)
         self.editor_panel.update_button_status("translate", trans_count)
-        self.editor_panel.set_status(f"Translated {trans_count} texts")
-        self.statusbar.showMessage("Translation complete")
+        status_msg = f"Translated {trans_count} texts"
+        if failed_count > 0:
+            status_msg += f", {failed_count} failed"
+        self.editor_panel.set_status(status_msg)
+        self.statusbar.showMessage(status_msg)
         self.project.save(self.config.PROJECTS_DIR)
         self.save_state("Translate All")
     
@@ -885,12 +923,13 @@ class MainWindow(QMainWindow):
         self.editor_panel.setEnabled(False)
         
         image_path = page.file_path
-        # Pass ALL valid bounding boxes to inpainter. Even if OCR failed (e.g. blank bubble),
-        # the user still wants the drawn bubble erased.
-        bboxes = [b.bbox for b in page.bubbles if b.bbox and len(b.bbox) == 4]
+        # Only inpaint bubbles that were successfully translated (preserving source pixels for OCR-failed or translation-failed bubbles)
+        valid_bubbles = [b for b in page.bubbles if b.status not in ["ocr_empty", "failed"] and (b.status == "translated" or b.text_translated)]
+        bboxes = [b.bbox for b in valid_bubbles if b.bbox and len(b.bbox) == 4]
         
         if not bboxes:
-             self.editor_panel.set_status("No bubbles to inpaint")
+             self.editor_panel.set_status("No translated bubbles to inpaint (source pixels preserved)")
+             self.statusbar.showMessage("No translated bubbles to inpaint")
              self.editor_panel.setEnabled(True)
              return
 
@@ -1318,15 +1357,39 @@ class MainWindow(QMainWindow):
 
     def _on_batch_complete(self, results):
         """Batch processing finished"""
-        self.statusbar.showMessage(f"Batch processing complete. Processed {len(results)} pages.")
-        self.editor_panel.set_status("Batch complete")
+        results = results or []
+        success_count = sum(1 for p in results if getattr(p, 'status', None) != "failed")
+        failure_count = sum(1 for p in results if getattr(p, 'status', None) == "failed")
+        total_count = len(results)
+
+        status_msg = f"Batch complete: {success_count}/{total_count} succeeded"
+        if failure_count > 0:
+            status_msg += f", {failure_count} failed"
+
+        self.statusbar.showMessage(status_msg)
+        self.editor_panel.set_status(status_msg)
         self.editor_panel.setEnabled(True)
         self.image_viewer.setEnabled(True)
         
-        self.project.save(self.config.PROJECTS_DIR)
+        if self.project:
+            self.project.save(self.config.PROJECTS_DIR)
         
         # Reload current page to show changes
-        if self.image_viewer.current_page:
-            self.load_page(self.image_viewer.current_page)
+        current_page = getattr(self.image_viewer, 'current_page', None)
+        if current_page:
+            if self.project and current_page.id in self.project.pages:
+                current_page = self.project.pages[current_page.id]
+            self._load_page(current_page)
             
-        QMessageBox.information(self, "Batch Complete", f"Successfully processed {len(results)} pages.")
+        if failure_count > 0:
+            QMessageBox.warning(
+                self, 
+                "Batch Complete with Errors", 
+                f"Batch finished: {success_count} succeeded, {failure_count} failed."
+            )
+        else:
+            QMessageBox.information(
+                self, 
+                "Batch Complete", 
+                f"Successfully processed {success_count} of {total_count} pages."
+            )

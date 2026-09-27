@@ -10,12 +10,136 @@ Supports multiple translation backends:
 """
 
 import requests
-from typing import Optional
+from typing import Optional, Dict
 import logging
 from pathlib import Path
 import asyncio
+import os
+import json
+import tempfile
+import threading
 
 logger = logging.getLogger(__name__)
+
+
+class TranslationError(RuntimeError):
+    """Base error for translation operations."""
+    pass
+
+
+class TranslationBackendError(TranslationError):
+    """Raised when a translation backend fails (network, API, inference)."""
+    pass
+
+
+class MissingCredentialsError(TranslationError):
+    """Raised when required API credentials are missing."""
+    pass
+
+
+class UnsupportedBackendError(TranslationError):
+    """Raised when an unsupported translation backend is selected."""
+    pass
+
+
+class TranslationCache:
+    """Thread-safe and process-safe persistent translation cache with atomic writes."""
+    
+    def __init__(self, cache_file: Optional[Path] = None):
+        from ..core.config import Config
+        if cache_file is not None:
+            self.cache_file = Path(cache_file).resolve()
+        else:
+            default_path = getattr(Config, 'TRANSLATION_CACHE_FILE', Config.PORTABLE_DIR / "cache" / "translation_cache.json")
+            self.cache_file = Path(default_path).resolve()
+        
+        self.lock_file = self.cache_file.with_suffix('.lock')
+        self._thread_lock = threading.RLock()
+        self._in_memory: Dict[str, str] = {}
+        self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+        self._reload_from_disk()
+
+    def _acquire_file_lock(self):
+        lock_fd = os.open(str(self.lock_file), os.O_CREAT | os.O_RDWR)
+        try:
+            import fcntl
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        except Exception:
+            pass
+        return lock_fd
+
+    def _release_file_lock(self, lock_fd):
+        try:
+            import fcntl
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        except Exception:
+            pass
+        finally:
+            try:
+                os.close(lock_fd)
+            except Exception:
+                pass
+
+    def _reload_from_disk(self) -> Dict[str, str]:
+        if self.cache_file.exists():
+            try:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        self._in_memory.update(data)
+                        return self._in_memory
+            except Exception as e:
+                logger.warning(f"Could not read translation cache: {e}")
+        return self._in_memory
+
+    def get(self, key: str) -> Optional[str]:
+        with self._thread_lock:
+            if key in self._in_memory:
+                return self._in_memory[key]
+            self._reload_from_disk()
+            return self._in_memory.get(key)
+
+    def set(self, key: str, value: str):
+        with self._thread_lock:
+            lock_fd = self._acquire_file_lock()
+            try:
+                current_disk = {}
+                if self.cache_file.exists():
+                    try:
+                        with open(self.cache_file, "r", encoding="utf-8") as f:
+                            loaded = json.load(f)
+                            if isinstance(loaded, dict):
+                                current_disk = loaded
+                    except Exception:
+                        current_disk = {}
+
+                current_disk.update(self._in_memory)
+                current_disk[key] = value
+                self._in_memory = current_disk
+
+                cache_dir = self.cache_file.parent
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile("w", dir=cache_dir, delete=False, encoding="utf-8") as tf:
+                    json.dump(self._in_memory, tf, ensure_ascii=False, indent=2)
+                    tf.flush()
+                    os.fsync(tf.fileno())
+                    temp_name = tf.name
+
+                os.replace(temp_name, self.cache_file)
+            finally:
+                self._release_file_lock(lock_fd)
+
+    def __contains__(self, key: str) -> bool:
+        return self.get(key) is not None
+
+    def __getitem__(self, key: str) -> str:
+        val = self.get(key)
+        if val is None:
+            raise KeyError(key)
+        return val
+
+    def __setitem__(self, key: str, value: str):
+        self.set(key, value)
 
 
 # NLLB language code mapping
@@ -63,8 +187,9 @@ class Translator:
         - "offline": Alias for "nllb"
     """
     
-    def __init__(self, api: str = "deepl", source_lang: str = "ja", target_lang: str = "en"):
-        self.api = api
+    def __init__(self, api: str = "deepl", source_lang: str = "ja", target_lang: str = "en", cache_file: Optional[Path] = None, backend: Optional[str] = None):
+        self.api = backend if backend is not None else api
+        self.backend = self.api
         self.source_lang = source_lang
         self.target_lang = target_lang
         self.api_key = None
@@ -86,33 +211,20 @@ class Translator:
             load_dotenv()
             self.api_key = os.getenv("OPENAI_API_KEY")
         
-        
-        # Simple disk cache
-        self.cache_file = Path("bck/translation_cache.json")
-        self.cache = self._load_cache()
+        # Persistent thread/process safe disk cache
+        self.cache = TranslationCache(cache_file)
+        self.cache_file = self.cache.cache_file
         
         logger.info(f"Translator initialized with backend: {api}")
         
     def _load_cache(self) -> dict:
-        """Load translation cache from disk"""
-        if self.cache_file.exists():
-            try:
-                import json
-                with open(self.cache_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.error(f"Failed to load cache: {e}")
-        return {}
+        """Compatibility helper"""
+        return self.cache._reload_from_disk()
         
     def _save_cache(self):
-        """Save translation cache to disk"""
-        try:
-            self.cache_file.parent.mkdir(exist_ok=True)
-            import json
-            with open(self.cache_file, "w", encoding="utf-8") as f:
-                json.dump(self.cache, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to save cache: {e}")
+        """Compatibility helper"""
+        pass
+        
     def download_model(self):
         """Force download/load of offline models"""
         try:
@@ -136,6 +248,12 @@ class Translator:
             logger.error(f"Failed to download model: {e}")
             raise
 
+    def _get_cache_key(self, text: str, source_lang: Optional[str] = None, target_lang: Optional[str] = None, api: Optional[str] = None) -> str:
+        s_lang = source_lang or self.source_lang
+        t_lang = target_lang or self.target_lang
+        eff_api = api or self.api
+        return f"{eff_api}|{s_lang}|{t_lang}|{text}"
+
     def translate(self, text: str, context: Optional[str] = None, api_override: Optional[str] = None) -> str:
         """Translate text from source to target language
         
@@ -144,60 +262,47 @@ class Translator:
             context: Optional context for AI models
             api_override: Force use of specific backend (e.g. "google")
         """
-        
-        if not text.strip():
+        if not text or not text.strip():
             return ""
             
         # Determine effective API
         effective_api = api_override if api_override else self.api
             
         # Check cache
-        # Key includes api, source, target to avoid collisions
-        cache_key = f"{effective_api}|{self.source_lang}|{self.target_lang}|{text}"
-        if cache_key in self.cache:
-            return self.cache[cache_key]
+        cache_key = self._get_cache_key(text, self.source_lang, self.target_lang, effective_api)
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            return cached
         
-        result = text
         if effective_api == "google":
             result = self._google_translate(text)
         elif effective_api == "deepl":
             if not self.api_key:
-                logger.warning("DeepL API key missing. Falling back to Google Translate.")
-                result = self._google_translate(text)
-            else:
-                result = self._deepl_translate(text)
+                raise MissingCredentialsError("DeepL API key is missing. Please configure DEEPL_API_KEY in your settings.")
+            result = self._deepl_translate(text)
         elif effective_api == "openai":
             if not self.api_key:
-                logger.warning("OpenAI API key missing. Falling back to Google Translate.")
-                result = self._google_translate(text)
-            else:
-                result = self._openai_translate(text, context)
+                raise MissingCredentialsError("OpenAI API key is missing. Please configure OPENAI_API_KEY in your settings.")
+            result = self._openai_translate(text, context)
         elif effective_api in ("nllb", "offline"):
             result = self._nllb_translate(text)
         elif effective_api == "opus":
             result = self._opus_translate(text)
         else:
-            logger.warning(f"Unknown translation API: {effective_api}")
-            return text
+            raise UnsupportedBackendError(f"Unsupported translation backend: '{effective_api}'")
             
-        # Save to cache if successful and different
-        # Fallback: if result is the same or None, we return text?
-        # If result starts with specific error brackets (legacy behavior), we should return text.
-        # But we are changing the implementation below to NOT return brackets.
-        
-        if result and result != text:
-             self.cache[cache_key] = result
-             self._save_cache()
-             return result
+        # Save to cache even if translation is identical to original input
+        if result is not None:
+            self.cache.set(cache_key, result)
+            return result
              
-        return text
+        raise TranslationBackendError(f"Translation backend '{effective_api}' returned None.")
     
     def _google_translate(self, text: str) -> str:
         """Use googletrans library"""
         try:
             from googletrans import Translator as GTranslator
             translator = GTranslator()
-            # Use auto-detection to handle cases where the text isn't in the default project source language
             result = translator.translate(text, src='auto', dest=self.target_lang)
             
             # Handle async result (newer googletrans versions)
@@ -209,29 +314,23 @@ class Translator:
                     asyncio.set_event_loop(loop)
                 
                 if loop.is_running():
-                    # We are already in a loop (e.g. valid for some GUI frameworks or nested async)
-                    # This is tricky in sync context. simpler to just use run_until_complete if not running
-                    # But if loop is running, we might need a future. 
-                    # For this specific app, we are likely not in an async loop in the worker thread.
-                    # But let's be safe:
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor() as pool:
-                         result = pool.submit(asyncio.run, result).result()
+                        result = pool.submit(asyncio.run, result).result()
                 else:
                     result = loop.run_until_complete(result)
             
-            return result.text
+            if not result or not hasattr(result, 'text') or result.text is None:
+                raise TranslationBackendError("Google Translate returned empty response.")
+            return str(result.text)
         except Exception as e:
             logger.error(f"Google Translate error: {e}")
-            return text  # Return original
-
-
-
+            raise TranslationBackendError(f"Google Translate error: {e}") from e
     
     def _deepl_translate(self, text: str) -> str:
         """Use DeepL API"""
         if not self.api_key:
-            return text
+            raise MissingCredentialsError("DeepL API key is missing.")
         
         try:
             url = "https://api-free.deepl.com/v2/translate"
@@ -241,59 +340,57 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params)
-            return response.json()["translations"][0]["text"]
+            response = requests.post(url, data=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            translations = data.get("translations", [])
+            if not translations:
+                raise TranslationBackendError("DeepL returned no translations.")
+            return translations[0]["text"]
         except Exception as e:
             logger.error(f"DeepL error: {e}")
-            return text
+            raise TranslationBackendError(f"DeepL error: {e}") from e
     
     def _openai_translate(self, text: str, context: Optional[str] = None) -> str:
         """Use OpenAI GPT for contextual translation"""
         if not self.api_key:
-            return text
+            raise MissingCredentialsError("OpenAI API key is missing.")
         
         try:
             from openai import OpenAI
             client = OpenAI(api_key=self.api_key)
             
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
-            Maintain the tone and style appropriate for comics.
-            Context: {context or 'No context provided'}
-            
-            Text: "{text}"
-            
-            Translation:"""
+Maintain the tone and style appropriate for comics.
+Context: {context or 'No context provided'}
+
+Text: "{text}"
+
+Translation:"""
             
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=500
+                max_tokens=500,
+                timeout=30
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f"OpenAI error: {e}")
-            return text
+            raise TranslationBackendError(f"OpenAI error: {e}") from e
     
     def _nllb_translate(self, text: str) -> str:
-        """High-quality offline translation using Meta's NLLB-200
-        
-        First run will download ~2.3GB model. Subsequent runs use cache.
-        Provides quality close to DeepL/Google for most language pairs.
-        """
+        """High-quality offline translation using Meta's NLLB-200"""
         try:
-            # Lazy load model (if not already loaded by download_model)
             if self._nllb_model is None:
                 self.download_model()
             
-            # Get NLLB language codes
             src_code = NLLB_LANG_CODES.get(self.source_lang, "jpn_Jpan")
             tgt_code = NLLB_LANG_CODES.get(self.target_lang, "eng_Latn")
             
-            # Tokenize
             self._nllb_tokenizer.src_lang = src_code
             inputs = self._nllb_tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
             
-            # Generate translation
             translated_tokens = self._nllb_model.generate(
                 **inputs,
                 forced_bos_token_id=self._nllb_tokenizer.convert_tokens_to_ids(tgt_code),
@@ -306,35 +403,25 @@ class Translator:
             return result
             
         except ImportError:
-            logger.error("transformers not installed. Install with: pip install transformers sentencepiece")
-            return text
+            raise TranslationBackendError("transformers not installed. Install with: pip install transformers sentencepiece")
         except Exception as e:
             logger.error(f"NLLB translation error: {e}")
-            return text
+            raise TranslationBackendError(f"NLLB translation error: {e}") from e
     
     def _opus_translate(self, text: str) -> str:
-        """Fast offline translation using Helsinki-NLP OPUS-MT
-        
-        Smaller models (~300MB), faster inference, slightly lower quality than NLLB.
-        Best for quick translations when resources are limited.
-        """
+        """Fast offline translation using Helsinki-NLP OPUS-MT"""
         try:
-            # Lazy load model
             if self._opus_model is None:
-                 self.download_model()
+                self.download_model()
             
-            # Tokenize and translate
             inputs = self._opus_tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
             translated_tokens = self._opus_model.generate(**inputs, max_length=512)
             result = self._opus_tokenizer.decode(translated_tokens[0], skip_special_tokens=True)
-            
             return result
             
         except ImportError:
-            logger.error("transformers not installed. Install with: pip install transformers sentencepiece")
-            return text
+            raise TranslationBackendError("transformers not installed. Install with: pip install transformers sentencepiece")
         except Exception as e:
             logger.error(f"OPUS-MT translation error: {e}")
-            # Try NLLB as fallback
             logger.info("Falling back to NLLB...")
             return self._nllb_translate(text)

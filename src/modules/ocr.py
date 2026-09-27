@@ -17,6 +17,16 @@ MangaOcr = None
 RapidOCR = None
 
 
+class OCRError(RuntimeError):
+    """Base error for OCR operations."""
+    pass
+
+
+class OCREngineUnavailableError(OCRError):
+    """Raised when an OCR engine cannot be initialized or loaded."""
+    pass
+
+
 class MangaOCR:
     """OCR using manga-ocr model"""
     
@@ -54,20 +64,19 @@ class MangaOCR:
         except Exception as e:
             logger.error(f"Failed to load MangaOCR: {e}")
     
-    def recognize(self, image: np.ndarray, bbox: list) -> str:
+    def recognize(self, image: np.ndarray, bbox: list = None) -> str:
         """Recognize text in the bbox region"""
         if self.mocr is None:
-            logger.warning("MangaOCR not loaded, text recognition unavailable")
-            return ""
+            raise OCREngineUnavailableError("MangaOCR engine is not loaded. Please install manga-ocr or check model availability.")
         
-        # Validate bbox
-        if not isinstance(bbox, list) or len(bbox) != 4:
-            logger.error(f"Invalid bbox format: {bbox}")
-            return ""
-        
-        # Extract region of interest
-        x1, y1, x2, y2 = bbox
-        roi = image[y1:y2, x1:x2]
+        if bbox is not None:
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                logger.error(f"Invalid bbox format: {bbox}")
+                return ""
+            x1, y1, x2, y2 = bbox
+            roi = image[y1:y2, x1:x2]
+        else:
+            roi = image
         
         # Convert to PIL Image
         from PIL import Image
@@ -81,9 +90,8 @@ class MangaOCR:
             return text.strip()
         except Exception as e:
             logger.error(f"OCR error: {e}")
-            original_text = "ERROR" # Fallback if error
             self.confidence = 0.0
-            return ""
+            raise OCRError(f"MangaOCR recognition failed: {e}") from e
 
 
 class EasyOCR:
@@ -153,29 +161,26 @@ class EasyOCR:
         except Exception as e:
             logger.error(f"Failed to load RapidOCR: {e}")
             
-    def recognize(self, image: np.ndarray, bbox: list) -> str:
+    def recognize(self, image: np.ndarray, bbox: list = None) -> str:
         """Recognize text in the bbox region"""
         if self.reader is None:
-            return "OCR engine not loaded"
+            raise OCREngineUnavailableError("RapidOCR engine is not loaded. Please install rapidocr_onnxruntime or check models.")
             
-        # 1. Padding to ensure text edges are captured
-        # 2. Convert to grayscale for better contrast
-        # 3. Simple thresholding might help if image is noisy
-        
-        # Extract ROI
-        x1, y1, x2, y2 = bbox
-        
-        # Add padding (10%)
-        h, w = image.shape[:2]
-        pad_x = int((x2 - x1) * 0.1)
-        pad_y = int((y2 - y1) * 0.1)
-        
-        x1 = max(0, x1 - pad_x)
-        y1 = max(0, y1 - pad_y)
-        x2 = min(w, x2 + pad_x)
-        y2 = min(h, y2 + pad_y)
-        
-        roi = image[y1:y2, x1:x2]
+        if bbox is not None:
+            # Extract ROI with padding
+            x1, y1, x2, y2 = bbox
+            h, w = image.shape[:2]
+            pad_x = int((x2 - x1) * 0.1)
+            pad_y = int((y2 - y1) * 0.1)
+            
+            x1 = max(0, x1 - pad_x)
+            y1 = max(0, y1 - pad_y)
+            x2 = min(w, x2 + pad_x)
+            y2 = min(h, y2 + pad_y)
+            
+            roi = image[y1:y2, x1:x2]
+        else:
+            roi = image
         
         try:
             # RapidOCR returns list of results: [[[[pt, pt, pt, pt], "text", confidence], ...]]
@@ -183,6 +188,7 @@ class EasyOCR:
             result, elapse = self.reader(roi)
             
             if not result:
+                self.confidence = 0.0
                 return ""
             
             # Combine all detected text lines
@@ -196,7 +202,7 @@ class EasyOCR:
             
         except Exception as e:
             logger.error(f"RapidOCR error: {e}")
-            return ""
+            raise OCRError(f"RapidOCR recognition failed: {e}") from e
 
 # Alias for compatibility
 RapidOCR_Module = EasyOCR

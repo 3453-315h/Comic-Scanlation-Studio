@@ -5,6 +5,8 @@ import json
 from datetime import datetime
 import uuid
 
+import shutil
+
 @dataclass
 class TextBubble:
     """Represents a detected text bubble"""
@@ -69,14 +71,61 @@ class Project:
     
     def add_page(self, image_path: Path) -> Page:
         """Add a new page to the project"""
-        page = Page(file_path=image_path)
+        page = Page(file_path=Path(image_path))
         self.pages[page.id] = page
         return page
     
     def save(self, projects_dir: Path):
-        """Save project to local disk"""
-        project_dir = projects_dir / self.id
-        project_dir.mkdir(exist_ok=True)
+        """Save project to local disk with portable project-relative paths.
+        
+        Original images outside the project directory are copied into the project's
+        'pages' directory so the project is self-contained and portable.
+        """
+        p_path = Path(projects_dir)
+        if p_path.name == self.id:
+            project_dir = p_path
+        else:
+            project_dir = p_path / self.id
+        project_dir.mkdir(parents=True, exist_ok=True)
+        pages_dir = project_dir / "pages"
+        pages_dir.mkdir(exist_ok=True)
+        
+        pages_dict = {}
+        for pid, page in self.pages.items():
+            rel_file = None
+            if page.file_path:
+                fp = Path(page.file_path)
+                try:
+                    rel_file = str(fp.resolve().relative_to(project_dir.resolve()))
+                except ValueError:
+                    if fp.exists():
+                        dest = pages_dir / f"{pid}_{fp.name}"
+                        if fp.resolve() != dest.resolve():
+                            shutil.copy2(fp, dest)
+                            page.file_path = dest
+                        rel_file = str(dest.resolve().relative_to(project_dir.resolve()))
+                    else:
+                        rel_file = str(page.file_path)
+            
+            rel_proc = None
+            if page.processed_image_path:
+                pp = Path(page.processed_image_path)
+                try:
+                    rel_proc = str(pp.resolve().relative_to(project_dir.resolve()))
+                except ValueError:
+                    if pp.exists():
+                        dest = pages_dir / f"{pid}_proc_{pp.name}"
+                        if pp.resolve() != dest.resolve():
+                            shutil.copy2(pp, dest)
+                            page.processed_image_path = dest
+                        rel_proc = str(dest.resolve().relative_to(project_dir.resolve()))
+                    else:
+                        rel_proc = str(page.processed_image_path)
+            
+            pdict = page.to_dict()
+            pdict["file_path"] = rel_file
+            pdict["processed_image_path"] = rel_proc
+            pages_dict[pid] = pdict
         
         # Save project metadata
         data = {
@@ -84,7 +133,7 @@ class Project:
             "name": self.name,
             "created_at": self.created_at.isoformat(),
             "settings": self.settings,
-            "pages": {pid: p.to_dict() for pid, p in self.pages.items()}
+            "pages": pages_dict
         }
         
         with open(project_dir / "project.json", "w", encoding="utf-8") as f:
@@ -92,17 +141,66 @@ class Project:
     
     @classmethod
     def load(cls, project_dir: Path) -> "Project":
-        """Load project from disk"""
-        with open(project_dir / "project.json", "r", encoding="utf-8") as f:
+        """Load project from disk, resolving relative and legacy absolute paths."""
+        project_dir = Path(project_dir)
+        project_file = project_dir / "project.json"
+        with open(project_file, "r", encoding="utf-8") as f:
             data = json.load(f)
         
         project = cls(name=data["name"], project_id=data["id"])
         project.created_at = datetime.fromisoformat(data["created_at"])
         project.settings = data["settings"]
         
+        pages_dir = project_dir / "pages"
+        
         for pid, pdata in data["pages"].items():
-            page = Page(id=pid, file_path=Path(pdata["file_path"]))
-            page.processed_image_path = Path(pdata["processed_image_path"]) if pdata["processed_image_path"] else None
+            raw_path = pdata.get("file_path")
+            file_path = None
+            if raw_path:
+                cand = Path(raw_path)
+                if not cand.is_absolute():
+                    file_path = (project_dir / cand).resolve()
+                elif cand.exists():
+                    file_path = cand
+                else:
+                    # Legacy absolute path resolution if source moved/deleted
+                    if (project_dir / cand.name).exists():
+                        file_path = (project_dir / cand.name).resolve()
+                    elif (pages_dir / cand.name).exists():
+                        file_path = (pages_dir / cand.name).resolve()
+                    elif pages_dir.exists():
+                        matches = list(pages_dir.glob(f"{pid}_*"))
+                        if matches:
+                            file_path = matches[0].resolve()
+                        else:
+                            file_path = cand
+                    else:
+                        file_path = cand
+            
+            raw_proc = pdata.get("processed_image_path")
+            proc_path = None
+            if raw_proc:
+                cand_proc = Path(raw_proc)
+                if not cand_proc.is_absolute():
+                    proc_path = (project_dir / cand_proc).resolve()
+                elif cand_proc.exists():
+                    proc_path = cand_proc
+                else:
+                    if (project_dir / cand_proc.name).exists():
+                        proc_path = (project_dir / cand_proc.name).resolve()
+                    elif (pages_dir / cand_proc.name).exists():
+                        proc_path = (pages_dir / cand_proc.name).resolve()
+                    elif pages_dir.exists():
+                        matches = list(pages_dir.glob(f"{pid}_proc_*"))
+                        if matches:
+                            proc_path = matches[0].resolve()
+                        else:
+                            proc_path = cand_proc
+                    else:
+                        proc_path = cand_proc
+                        
+            page = Page(id=pid, file_path=file_path)
+            page.processed_image_path = proc_path
             
             for bdata in pdata["bubbles"]:
                 bubble = TextBubble(
