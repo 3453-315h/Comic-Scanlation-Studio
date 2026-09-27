@@ -33,7 +33,7 @@ A powerful, local-first AI tool for automating the scanlation process: Detection
 
 ## 🧠 AI Model Reference
 
-The tool uses several specialized AI models. These are **auto-downloaded** on first use, or can be managed via **Settings > Manage AI Models**.
+The tool uses several specialized AI models. Verified models can be acquired automatically or managed via **Settings > Manage AI Models**. Unverified model weights require explicit user confirmation before download and execution.
 
 | Task | Default/Recommended Model | Source | Size |
 | :--- | :--- | :--- | :--- |

@@ -24,10 +24,11 @@ class DownloadThread(QThread):
     progress = Signal(str)  # Status message
     finished_download = Signal(bool, str)  # success, message
     
-    def __init__(self, model_name: str, model_type: str):
+    def __init__(self, model_name: str, model_type: str, allow_unverified: bool = False):
         super().__init__()
         self.model_name = model_name
         self.model_type = model_type
+        self.allow_unverified = allow_unverified
     
     def run(self):
         try:
@@ -82,30 +83,19 @@ class DownloadThread(QThread):
 
         if "Comic Bubble Detector" in self.model_name:
             model_file = "comic-speech-bubble-detector.pt"
-            url = "https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m/resolve/main/comic-speech-bubble-detector.pt"
+            self.progress.emit(f"Acquiring {model_file}...")
             
-            self.progress.emit(f"Downloading {model_file} from HuggingFace...")
+            from ...modules.detector import acquire_detector_model
+            dest_path = acquire_detector_model(
+                model_name=model_file,
+                target_dir=yolo_dir,
+                timeout=60,
+                allow_unverified=self.allow_unverified,
+            )
             
-            import requests
-            response = requests.get(url, stream=True)
-            response.raise_for_status()
-            
-            total_size = int(response.headers.get('content-length', 0))
-            block_size = 8192
-            downloaded = 0
-            
-            dest_path = yolo_dir / model_file
-            
-            with open(dest_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=block_size):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        # Optional: emit percent progress if we wanted to be fancy
-            
-            # Verify load
+            # Verify load with YOLO
             from ultralytics import YOLO
-            YOLO(dest_path)
+            YOLO(str(dest_path))
             
         else:
             # Standard YOLO models
@@ -437,6 +427,27 @@ class DownloadModelsDialog(QDialog):
             return
         
         model = self.MODELS[row]
+        allow_unverified = False
+
+        if "Comic Bubble Detector" in model['name']:
+            from ...modules.detector import DETECTOR_MODEL_REGISTRY
+            reg = DETECTOR_MODEL_REGISTRY.get("comic-speech-bubble-detector.pt", {})
+            source_url = reg.get("url", "https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m/resolve/main/comic-speech-bubble-detector.pt")
+            pinned_sha = reg.get("sha256")
+            if not pinned_sha:
+                reply = QMessageBox.warning(
+                    self,
+                    "Security Notice: Unverified Model Weights",
+                    f"The model '{model['name']}' from:\n{source_url}\n\n"
+                    f"does not have a pinned cryptographic SHA-256 hash. Loading executable model weights "
+                    f"can execute arbitrary code.\n\n"
+                    f"Do you explicitly opt in to download and use this unverified model?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+                allow_unverified = True
         
         # Disable all download buttons during download
         for btn in self.download_buttons:
@@ -448,7 +459,7 @@ class DownloadModelsDialog(QDialog):
         self.status_label.setText(f"Downloading {model['name']}...")
         
         # Start download thread
-        self.download_thread = DownloadThread(model['name'], model['type'])
+        self.download_thread = DownloadThread(model['name'], model['type'], allow_unverified=allow_unverified)
         self.download_thread.progress.connect(self._on_progress)
         self.download_thread.finished_download.connect(
             lambda success, msg: self._on_download_finished(row, success, msg)

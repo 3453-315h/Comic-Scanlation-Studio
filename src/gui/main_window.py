@@ -555,7 +555,7 @@ class MainWindow(QMainWindow):
         # 2. Collect pages (prefer processed/translated images, fallback to original)
         export_pages = []
         for page in self.project.pages.values():
-            if page.processed_image_path and page.processed_image_path.exists():
+            if getattr(page, 'status', None) != 'failed' and page.processed_image_path and page.processed_image_path.exists():
                 export_pages.append(page.processed_image_path)
             else:
                 export_pages.append(page.file_path)
@@ -1261,12 +1261,13 @@ class MainWindow(QMainWindow):
         
         self.image_viewer.display_bubbles(page.bubbles)
         
-        if page.processed_image_path:
+        p_status = getattr(processed_page, 'status', 'success')
+        if p_status != "failed" and page.processed_image_path:
             self.image_viewer.load_image(page.processed_image_path)
+        else:
+            self.image_viewer.load_image(page.file_path)
         
         self.editor_panel.set_progress(-1)
-        
-        p_status = getattr(processed_page, 'status', 'success')
         err_details = getattr(processed_page, 'error_details', [])
         err_msg = getattr(processed_page, 'error', None)
         first_err = err_details[0] if err_details else err_msg

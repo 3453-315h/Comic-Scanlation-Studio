@@ -275,11 +275,16 @@ class ScanlationPipeline:
         else:
             bboxes = [b.bbox for b in bubbles if b.status not in ("failed", "ocr_empty") and b.bbox and len(b.bbox) == 4]
         inpainted_image = image.copy()
+        inpainting_failed = False
         if bboxes:
             try:
                 inpainted_image = self.inpainter.inpaint_multiple(inpainted_image, bboxes)
             except Exception as e:
-                logger.error(f"Batch inpainting failed: {e}")
+                err_msg = f"Inpainting failed: {e}"
+                logger.error(err_msg)
+                stage_errors.append(err_msg)
+                inpainted_image = image.copy()  # Preserve original source artwork
+                inpainting_failed = True
         else:
             logger.info("No valid bubbles to inpaint")
 
@@ -287,50 +292,49 @@ class ScanlationPipeline:
         # Stage 5 – Text Imprinting
         # ---------------------------------------------------------------------
         final_image = inpainted_image
+        imprinting_failed = False
         
         if self.enable_imprint:
-            logger.info("[5/5] Imprinting translated text")
-            _emit("[5/5] Imprinting translated text", 95)
-            translated_bubbles = [b for b in bubbles if b.status == "translated" and b.text_translated]
-            
-            if translated_bubbles:
-                try:
-                    # Optionally analyze style from original image
-                    # Moved to before inpainting for safety
-                    # if getattr(self.config, 'AUTO_STYLE', False):
-                    #    self.font_style = self.imprinter.analyze_style(image, bubbles)
-                    
-                    # Apply box expansion if configured
-                    if self.box_expansion != 0:
-                        for b in translated_bubbles:
-                            x1, y1, x2, y2 = b.bbox
-                            b.bbox = [
-                                max(0, x1 - self.box_expansion),
-                                max(0, y1 - self.box_expansion),
-                                min(image.shape[1], x2 + self.box_expansion),
-                                min(image.shape[0], y2 + self.box_expansion)
-                            ]
-                    
-                    final_image = self.imprinter.imprint(
-                        inpainted_image, 
-                        translated_bubbles, 
-                        self.font_style,
-                        auto_fit=True,
-                        use_elliptical_wrapping=self.shape_wrapping
-                    )
-                    logger.info(f"Imprinted {len(translated_bubbles)} text bubbles")
-                except Exception as e:
-                    logger.error(f"Text imprinting failed: {e}")
-                    final_image = inpainted_image
+            if inpainting_failed:
+                err_msg = "Imprinting skipped because inpainting failed; preserving original artwork"
+                logger.warning(err_msg)
+                final_image = image.copy()
             else:
-                logger.info("No translated bubbles to imprint")
+                logger.info("[5/5] Imprinting translated text")
+                _emit("[5/5] Imprinting translated text", 95)
+                translated_bubbles = [b for b in bubbles if b.status == "translated" and b.text_translated]
+                
+                if translated_bubbles:
+                    try:
+                        # Apply box expansion if configured
+                        if self.box_expansion != 0:
+                            for b in translated_bubbles:
+                                x1, y1, x2, y2 = b.bbox
+                                b.bbox = [
+                                    max(0, x1 - self.box_expansion),
+                                    max(0, y1 - self.box_expansion),
+                                    min(image.shape[1], x2 + self.box_expansion),
+                                    min(image.shape[0], y2 + self.box_expansion)
+                                ]
+                        
+                        final_image = self.imprinter.imprint(
+                            inpainted_image, 
+                            translated_bubbles, 
+                            self.font_style,
+                            auto_fit=True,
+                            use_elliptical_wrapping=self.shape_wrapping
+                        )
+                        logger.info(f"Imprinted {len(translated_bubbles)} text bubbles")
+                    except Exception as e:
+                        err_msg = f"Text imprinting failed: {e}"
+                        logger.error(err_msg)
+                        stage_errors.append(err_msg)
+                        final_image = image.copy()  # Restore original source artwork so erased-but-unlettered page is not exported
+                        imprinting_failed = True
+                else:
+                    logger.info("No translated bubbles to imprint")
         else:
             logger.info("[5/5] Imprinting disabled, skipping")
-
-        # Save the final image and update the page metadata
-        output_suffix = "_translated" if self.enable_imprint else "_inpainted"
-        page.processed_image_path = Path(page.file_path).parent / f"{page.id}{output_suffix}.png"
-        save_image(final_image, page.processed_image_path)
 
         # Attach bubbles to the page and update outcome metrics
         page.bubbles = bubbles
@@ -344,15 +348,26 @@ class ScanlationPipeline:
         page.empty_bubbles_count = len(empty_bubbles)
         page.error_details = stage_errors
 
-        if len(bubbles) > 0 and len(failed_bubbles) == len(bubbles):
+        if inpainting_failed or imprinting_failed:
+            page.status = "failed"
+            page.error = "; ".join(stage_errors)
+            page.processed_image_path = None
+        elif len(bubbles) > 0 and len(failed_bubbles) == len(bubbles):
             page.status = "failed"
             page.error = "; ".join(stage_errors) if stage_errors else "All bubbles failed processing"
+            page.processed_image_path = None
         elif len(failed_bubbles) > 0:
             page.status = "partial"
             page.error = "; ".join(stage_errors)
+            output_suffix = "_translated" if self.enable_imprint else "_inpainted"
+            page.processed_image_path = Path(page.file_path).parent / f"{page.id}{output_suffix}.png"
+            save_image(final_image, page.processed_image_path)
         else:
             page.status = "success"
             page.error = None
+            output_suffix = "_translated" if self.enable_imprint else "_inpainted"
+            page.processed_image_path = Path(page.file_path).parent / f"{page.id}{output_suffix}.png"
+            save_image(final_image, page.processed_image_path)
 
         _emit("Processing complete", 100)
         return page

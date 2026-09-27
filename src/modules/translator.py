@@ -47,6 +47,13 @@ class CacheLockError(TranslationError):
     pass
 
 
+class CacheCorruptError(TranslationError):
+    """Raised when the on-disk cache file is corrupt or malformed."""
+    def __init__(self, message: str, quarantine_path: Optional[Path] = None):
+        super().__init__(message)
+        self.quarantine_path = quarantine_path
+
+
 class TranslationCache:
     """Thread-safe and process-safe persistent translation cache with atomic writes."""
     
@@ -61,8 +68,35 @@ class TranslationCache:
         self.lock_file = self.cache_file.with_suffix('.lock')
         self._thread_lock = threading.RLock()
         self._in_memory: Dict[str, str] = {}
+        self.persistence_disabled = False
+        self.quarantine_path: Optional[Path] = None
         self.cache_file.parent.mkdir(parents=True, exist_ok=True)
         self._reload_from_disk()
+
+    @property
+    def is_durable(self) -> bool:
+        """Returns True if cache persistence is active, False if disabled."""
+        return not self.persistence_disabled
+
+    @property
+    def is_persistent(self) -> bool:
+        """Returns True if cache persistence is active, False if disabled."""
+        return not self.persistence_disabled
+
+    def _quarantine_corrupt_file(self, cause: Exception) -> Path:
+        """Quarantine corrupt cache file to preserve bytes for diagnosis without silent data loss."""
+        import shutil
+        import time
+        ts = int(time.time() * 1000)
+        quarantine = self.cache_file.with_name(f"{self.cache_file.stem}_corrupt_{ts}{self.cache_file.suffix}")
+        try:
+            shutil.copy2(str(self.cache_file), str(quarantine))
+            self.cache_file.unlink(missing_ok=True)
+        except Exception as q_err:
+            logger.error(f"Failed to quarantine corrupt cache file: {q_err}")
+        self.persistence_disabled = True
+        self.quarantine_path = quarantine
+        return quarantine
 
     def _acquire_file_lock(self) -> int:
         """Acquire an exclusive cross-process lock portably on Windows and POSIX."""
@@ -99,6 +133,7 @@ class TranslationCache:
     def _release_file_lock(self, lock_fd: int):
         """Release the cross-process lock portably on Windows and POSIX."""
         import sys
+        unlock_err = None
         try:
             if sys.platform == "win32":
                 try:
@@ -106,56 +141,91 @@ class TranslationCache:
                     os.lseek(lock_fd, 0, os.SEEK_SET)
                     msvcrt.locking(lock_fd, msvcrt.LK_UNLCK, 1)
                 except Exception as e:
-                    logger.warning(f"Error unlocking Windows lock file: {e}")
+                    unlock_err = CacheLockError(f"Windows file unlocking failed for {self.lock_file}: {e}")
             else:
                 try:
                     import fcntl
                     fcntl.flock(lock_fd, fcntl.LOCK_UN)
                 except Exception as e:
-                    logger.warning(f"Error unlocking POSIX lock file: {e}")
+                    unlock_err = CacheLockError(f"POSIX file unlocking failed for {self.lock_file}: {e}")
         finally:
             try:
                 os.close(lock_fd)
-            except Exception:
-                pass
+            except Exception as close_err:
+                if unlock_err is None:
+                    unlock_err = CacheLockError(f"Closing lock file descriptor failed for {self.lock_file}: {close_err}")
+
+        if unlock_err is not None:
+            raise unlock_err
 
     def _reload_from_disk(self) -> Dict[str, str]:
         if self.cache_file.exists():
             try:
                 with open(self.cache_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if isinstance(data, dict):
-                        self._in_memory.update(data)
-                        return self._in_memory
+                    content = f.read()
+                data = json.loads(content)
+                if not isinstance(data, dict):
+                    raise ValueError("Cache root is not a JSON object")
+                self._in_memory.update(data)
+                return self._in_memory
             except Exception as e:
-                logger.warning(f"Could not read translation cache: {e}")
+                quarantine = self._quarantine_corrupt_file(e)
+                err_msg = (
+                    f"Corrupt translation cache detected at {self.cache_file} ({e}). "
+                    f"Corrupt bytes quarantined to {quarantine}. Persistence is disabled."
+                )
+                logger.error(err_msg)
+                raise CacheCorruptError(err_msg, quarantine_path=quarantine) from e
         return self._in_memory
 
     def get(self, key: str) -> Optional[str]:
         with self._thread_lock:
             if key in self._in_memory:
                 return self._in_memory[key]
-            self._reload_from_disk()
+            if not self.persistence_disabled:
+                try:
+                    self._reload_from_disk()
+                except CacheCorruptError:
+                    return None
             return self._in_memory.get(key)
 
     def set(self, key: str, value: str):
         with self._thread_lock:
+            if self.persistence_disabled:
+                self._in_memory[key] = value
+                raise CacheCorruptError(
+                    f"Cache persistence is disabled due to quarantined corrupt cache ({self.quarantine_path}). "
+                    "Entry retained in-memory for session only.",
+                    quarantine_path=self.quarantine_path
+                )
+
             try:
                 lock_fd = self._acquire_file_lock()
             except CacheLockError as e:
                 logger.error(f"Failed to acquire file lock for cache persistence: {e}")
                 self._in_memory[key] = value
                 raise
+
+            write_exc = None
             try:
                 current_disk = {}
                 if self.cache_file.exists():
                     try:
                         with open(self.cache_file, "r", encoding="utf-8") as f:
-                            loaded = json.load(f)
-                            if isinstance(loaded, dict):
-                                current_disk = loaded
-                    except Exception:
-                        current_disk = {}
+                            content = f.read()
+                        loaded = json.loads(content)
+                        if isinstance(loaded, dict):
+                            current_disk = loaded
+                        else:
+                            raise ValueError("Cache root is not a JSON object")
+                    except Exception as parse_err:
+                        quarantine = self._quarantine_corrupt_file(parse_err)
+                        self._in_memory[key] = value
+                        raise CacheCorruptError(
+                            f"Corrupt translation cache detected on disk during set() ({parse_err}). "
+                            f"Preserved at {quarantine}. Persistence disabled.",
+                            quarantine_path=quarantine
+                        ) from parse_err
 
                 current_disk.update(self._in_memory)
                 current_disk[key] = value
@@ -170,8 +240,19 @@ class TranslationCache:
                     temp_name = tf.name
 
                 os.replace(temp_name, self.cache_file)
+            except Exception as e:
+                write_exc = e
+                raise
             finally:
-                self._release_file_lock(lock_fd)
+                try:
+                    self._release_file_lock(lock_fd)
+                except Exception as rel_err:
+                    if write_exc is not None:
+                        logger.error(f"Failed to release lock after write exception: {rel_err}")
+                        write_exc.lock_release_error = rel_err
+                        write_exc.__context__ = rel_err
+                    else:
+                        raise rel_err
 
     def __contains__(self, key: str) -> bool:
         return self.get(key) is not None
@@ -256,7 +337,19 @@ class Translator:
             self.api_key = os.getenv("OPENAI_API_KEY")
         
         # Persistent thread/process safe disk cache
-        self.cache = TranslationCache(cache_file)
+        try:
+            self.cache = TranslationCache(cache_file)
+        except CacheCorruptError as e:
+            logger.error(f"Translation cache initialization encountered corrupt cache: {e}. Translation will proceed uncached.")
+            self.cache = TranslationCache.__new__(TranslationCache)
+            from ..core.config import Config
+            p = Path(cache_file) if cache_file is not None else Path(getattr(Config, 'TRANSLATION_CACHE_FILE', Config.PORTABLE_DIR / "cache" / "translation_cache.json"))
+            self.cache.cache_file = p.resolve()
+            self.cache.lock_file = self.cache.cache_file.with_suffix('.lock')
+            self.cache._thread_lock = threading.RLock()
+            self.cache._in_memory = {}
+            self.cache.persistence_disabled = True
+            self.cache.quarantine_path = getattr(e, 'quarantine_path', None)
         self.cache_file = self.cache.cache_file
         
         logger.info(f"Translator initialized with backend: {api}")
@@ -337,7 +430,10 @@ class Translator:
             
         # Save to cache even if translation is identical to original input
         if result is not None:
-            self.cache.set(cache_key, result)
+            try:
+                self.cache.set(cache_key, result)
+            except CacheCorruptError as e:
+                logger.warning(f"Translation cache persistence unavailable ({e}). Translation succeeded uncached.")
             return result
              
         raise TranslationBackendError(f"Translation backend '{effective_api}' returned None.")

@@ -24,12 +24,13 @@ class ONNXTextDetector(YOLOTextDetector):
     Supports DirectML for AMD/Intel GPUs on Windows.
     """
     
-    def __init__(self, model_path: str = "comic-speech-bubble-detector.pt", confidence_threshold: float = None, device: Optional[str] = None):
+    def __init__(self, model_path: str = "comic-speech-bubble-detector.pt", confidence_threshold: float = None, device: Optional[str] = None, allow_unverified: bool = False):
         self.model_name = "YOLO-ONNX"
         from ..core.config import Config
         self.confidence_threshold = confidence_threshold if confidence_threshold is not None else Config.YOLO_CONFIDENCE
         self.device = device or getattr(Config, 'AI_DEVICE', 'auto')
         self.device_setting = self.device
+        self.allow_unverified = allow_unverified
         self.providers = ['CPUExecutionProvider']
         self.active_provider = 'CPUExecutionProvider'
         self.active_providers = self.providers
@@ -43,7 +44,7 @@ class ONNXTextDetector(YOLOTextDetector):
         if self.onnx_path and self.onnx_path.exists():
             logger.info(f"Found existing ONNX model: {self.onnx_path}")
             try:
-                super().__init__(str(self.onnx_path), self.confidence_threshold, device=self.device, auto_acquire=False)
+                super().__init__(str(self.onnx_path), self.confidence_threshold, device=self.device, auto_acquire=False, allow_unverified=allow_unverified)
             except RuntimeError as e:
                 if "ultralytics" in str(e).lower():
                     logger.info("ultralytics not installed; using ONNX Runtime direct session exclusively")
@@ -54,7 +55,7 @@ class ONNXTextDetector(YOLOTextDetector):
             # 2. Acquire or load base .pt model, then export to ONNX
             logger.info(f"ONNX model not found for '{model_path}'. Initializing base model with auto_acquire=True...")
             try:
-                super().__init__(model_path, self.confidence_threshold, device=self.device, auto_acquire=True)
+                super().__init__(model_path, self.confidence_threshold, device=self.device, auto_acquire=True, allow_unverified=allow_unverified)
                 self._export_to_onnx()
             except (ModelNotFoundError, ModelAcquisitionError):
                 # Re-raise acquisition/not-found errors immediately so they surface before inference
@@ -184,7 +185,9 @@ class ONNXTextDetector(YOLOTextDetector):
                 return
         except Exception as e:
             logger.error(f"ONNX Export failed: {e}")
-            logger.warning("Falling back to PyTorch inference")
+            logger.warning("ONNX export failed; explicitly falling back to PyTorch inference instead of ONNX.")
+            self.session = None
+            self.active_provider = "PyTorchFallback"
             
     def detect(self, image: np.ndarray, ignore_sfx: bool = True) -> List:
         """Run detection using direct ONNX Runtime session if available, or PyTorch fallback."""
