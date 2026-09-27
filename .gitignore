@@ -21,7 +21,7 @@ projects/
 *.jpg
 *.jpeg
 *.webp
-
+*.txt 
 # Firebase
 firebase/.env
 firebase/*.json
@@ -46,6 +46,9 @@ Thumbs.db
 _ARCHIVE/
 bck/
 mask_debug/
+scratch/
+.venv/
+comic-scanlation-round*.txt
 /test_*.py
 !tests/
 dump_bubbles.py

@@ -222,15 +222,28 @@ def create_cbz(image_paths: list[Path], output_path: Path) -> bool:
 
 def create_pdf(image_paths: list[Path], output_path: Path) -> bool:
     """
-    Create a PDF from a list of images using img2pdf.
+    Create a PDF from a list of images using img2pdf or Pillow fallback.
     """
-    import img2pdf
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        # img2pdf writes directly to file handle
-        with open(output_path, "wb") as f:
-            f.write(img2pdf.convert([str(p) for p in image_paths]))
-        return True
+        try:
+            import img2pdf
+            # img2pdf writes directly to file handle
+            with open(output_path, "wb") as f:
+                f.write(img2pdf.convert([str(p) for p in image_paths]))
+            return True
+        except ImportError:
+            from PIL import Image
+            images = []
+            for p in image_paths:
+                img = Image.open(p)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                images.append(img)
+            if images:
+                images[0].save(output_path, "PDF", resolution=100.0, save_all=True, append_images=images[1:])
+                return True
+            return False
     except Exception as e:
         print(f"Failed to create PDF: {e}")
         return False

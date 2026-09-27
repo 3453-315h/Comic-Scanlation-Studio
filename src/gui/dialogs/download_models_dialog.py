@@ -161,11 +161,11 @@ class DownloadModelsDialog(QDialog):
         },
         {
             "name": "Comic Bubble Detector",
-            "description": "Specialized YOLOv8m for speech bubbles (ogkalu)",
-            "size": "~50 MB",
+            "description": "Specialized YOLOv8m for speech bubbles (ogkalu) [Unverified - Requires User Approval]",
+            "size": "~52 MB",
             "location": "./models/yolo/comic-speech-bubble-detector.pt",
             "type": "Detection",
-            "auto_download": True,
+            "auto_download": False,
             "check_path": "./models/yolo/comic-speech-bubble-detector.pt",
         },
         {
@@ -346,6 +346,12 @@ class DownloadModelsDialog(QDialog):
         
         # Buttons
         btn_layout = QHBoxLayout()
+        
+        revoke_btn = QPushButton("Revoke Model Trust")
+        revoke_btn.setToolTip("Revoke stored cryptographic trust decisions for unpinned models")
+        revoke_btn.clicked.connect(self._revoke_trust)
+        btn_layout.addWidget(revoke_btn)
+        
         btn_layout.addStretch()
         
         refresh_btn = QPushButton("Refresh Status")
@@ -391,6 +397,12 @@ class DownloadModelsDialog(QDialog):
                 if size < 1024:  # Less than 1KB is suspicious for a model
                     return "⚠ Incomplete"
                 size_mb = size / (1024 * 1024)
+                if "Comic Bubble Detector" in model.get('name', ''):
+                    from ...core.security import is_model_trusted
+                    if is_model_trusted(check_path, check_path.name):
+                        return f"✓ Approved ({size_mb:.1f} MB)"
+                    else:
+                        return f"⚠ Unapproved ({size_mb:.1f} MB)"
                 return f"✓ Downloaded ({size_mb:.1f} MB)"
             
             if check_path.is_dir():
@@ -497,3 +509,25 @@ class DownloadModelsDialog(QDialog):
             is_downloaded = "✓" in status
             self.download_buttons[row].setText("✓ Downloaded" if is_downloaded else "Download")
             self.download_buttons[row].setEnabled(not is_downloaded)
+
+    def _revoke_trust(self):
+        """Revoke cryptographic trust decisions for approved models."""
+        from ...core.security import revoke_approved_model, load_trust_records
+        records = load_trust_records()
+        if not records:
+            QMessageBox.information(self, "Model Trust", "No persistent model trust records found.")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Revoke Model Trust",
+            f"Are you sure you want to revoke trust for all {len(records)} approved model artifact(s)?\n\n"
+            "This will clear stored cryptographic hashes and require re-approval before unpinned models can be executed.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            for name in list(records.keys()):
+                revoke_approved_model(name)
+            self.refresh_status()
+            QMessageBox.information(self, "Model Trust Revoked", "Model trust records have been successfully revoked.")

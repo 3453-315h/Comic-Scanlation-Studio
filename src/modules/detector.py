@@ -356,18 +356,24 @@ def acquire_detector_model(
                 )
         else:
             # Model has no pinned SHA-256 digest
+            from ..core.security import is_model_trusted, record_approved_model
+            if is_model_trusted(dest_file, model_name):
+                logger.info(f"Existing model '{dest_file.name}' matches user trust record: {dest_file}")
+                return dest_file
+
             if not effective_allow_unverified:
                 raise ModelAcquisitionError(
-                    f"Existing model file '{dest_file.name}' has no trusted pinned SHA-256 hash. "
+                    f"Existing model file '{dest_file.name}' has no trusted pinned SHA-256 hash or user trust record. "
                     f"Automatic loading of unverified executable weights is disabled. "
-                    f"Explicit user opt-in (allow_unverified=True) is required."
+                    f"Explicit user approval (allow_unverified=True) is required."
                 )
             curr_size = dest_file.stat().st_size
             if curr_size >= info_min_size:
                 with open(dest_file, "rb") as f:
                     hdr = f.read(512)
                 if b"<html" not in hdr.lower() and b"<!doctype html" not in hdr.lower():
-                    logger.warning(f"Existing unverified model present (user opt-in enabled): {dest_file}")
+                    logger.warning(f"Existing unverified model present (user approval granted): {dest_file}")
+                    record_approved_model(model_name, dest_file, info_url)
                     return dest_file
 
     if not info_sha256 and not effective_allow_unverified:
@@ -432,7 +438,9 @@ def acquire_detector_model(
         if info_sha256:
             logger.info(f"Successfully acquired and verified model at {dest_file} (SHA-256: {actual_sha256[:12]}...)")
         else:
-            logger.warning(f"Successfully acquired unverified model at {dest_file} (SHA-256: {actual_sha256[:12]}...; user opt-in enabled)")
+            from ..core.security import record_approved_model
+            record_approved_model(model_name, dest_file, info_url)
+            logger.warning(f"Successfully acquired unverified model at {dest_file} (SHA-256: {actual_sha256[:12]}...; recorded user trust)")
         return dest_file
 
     except Exception as e:
@@ -491,8 +499,9 @@ class YOLOTextDetector(TextDetector):
                 found_path = str(p.resolve())
                 break
 
-        if found_path and model_path_obj.name in DETECTOR_MODEL_REGISTRY:
-            reg_info = DETECTOR_MODEL_REGISTRY[model_path_obj.name]
+        from ..core.security import is_registered_detector
+        if found_path and is_registered_detector(model_path_obj.name):
+            reg_info = DETECTOR_MODEL_REGISTRY.get(model_path_obj.name) or DETECTOR_MODEL_REGISTRY.get(model_path_obj.with_suffix(".pt").name, {})
             pinned_sha = reg_info.get("sha256")
             if pinned_sha:
                 import hashlib
@@ -505,11 +514,17 @@ class YOLOTextDetector(TextDetector):
                         f"Existing model file '{found_path}' failed SHA-256 integrity check. "
                         f"Expected {pinned_sha}, got {hasher.hexdigest().lower()}."
                     )
-            elif not self.allow_unverified:
-                raise ModelNotFoundError(
-                    f"Model file '{found_path}' has no trusted pinned SHA-256 hash. "
-                    f"Loading unverified executable weights requires explicit user opt-in (allow_unverified=True)."
-                )
+            else:
+                from ..core.security import is_model_trusted, record_approved_model
+                if is_model_trusted(found_path, model_path_obj.name):
+                    logger.info(f"Model file '{found_path}' verified against persistent user trust record.")
+                elif not self.allow_unverified:
+                    raise ModelNotFoundError(
+                        f"Model file '{found_path}' has no trusted pinned SHA-256 hash or user trust record. "
+                        f"Loading unverified executable weights requires explicit user approval via Settings > Manage AI Models."
+                    )
+                else:
+                    record_approved_model(model_path_obj.name, found_path, reg_info.get("url", "unknown"))
         
         if not found_path and self.auto_acquire and model_path_obj.name in DETECTOR_MODEL_REGISTRY:
             try:

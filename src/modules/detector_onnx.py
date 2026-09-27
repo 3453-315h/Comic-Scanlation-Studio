@@ -40,11 +40,24 @@ class ONNXTextDetector(YOLOTextDetector):
         self.base_model_path = model_path
         self.onnx_path = self._get_onnx_path(model_path)
         
-        # 1. If ONNX model already exists, try loading it
+        # 1. If ONNX model already exists, validate trust before loading
         if self.onnx_path and self.onnx_path.exists():
-            logger.info(f"Found existing ONNX model: {self.onnx_path}")
+            from ..core.security import is_model_trusted, record_approved_model, is_registered_detector
+            onnx_name = self.onnx_path.name
+            if is_registered_detector(onnx_name) or is_registered_detector(self.base_model_path):
+                if not is_model_trusted(self.onnx_path, onnx_name):
+                    logger.warning(f"Existing ONNX model '{self.onnx_path}' is untrusted or modified.")
+                    if not self.allow_unverified:
+                        raise ModelNotFoundError(
+                            f"Existing ONNX model '{onnx_name}' has no approved cryptographic trust record. "
+                            "Refusing to execute unverified ONNX weights. Please acquire and approve the model via Settings > Manage AI Models."
+                        )
+                    else:
+                        record_approved_model(onnx_name, self.onnx_path, "explicit_user_approval")
+
+            logger.info(f"Found trusted ONNX model: {self.onnx_path}")
             try:
-                super().__init__(str(self.onnx_path), self.confidence_threshold, device=self.device, auto_acquire=False, allow_unverified=allow_unverified)
+                super().__init__(str(self.onnx_path), self.confidence_threshold, device=self.device, auto_acquire=False, allow_unverified=self.allow_unverified)
             except RuntimeError as e:
                 if "ultralytics" in str(e).lower():
                     logger.info("ultralytics not installed; using ONNX Runtime direct session exclusively")
@@ -55,7 +68,7 @@ class ONNXTextDetector(YOLOTextDetector):
             # 2. Acquire or load base .pt model, then export to ONNX
             logger.info(f"ONNX model not found for '{model_path}'. Initializing base model with auto_acquire=True...")
             try:
-                super().__init__(model_path, self.confidence_threshold, device=self.device, auto_acquire=True, allow_unverified=allow_unverified)
+                super().__init__(model_path, self.confidence_threshold, device=self.device, auto_acquire=True, allow_unverified=self.allow_unverified)
                 self._export_to_onnx()
             except (ModelNotFoundError, ModelAcquisitionError):
                 # Re-raise acquisition/not-found errors immediately so they surface before inference
@@ -109,6 +122,12 @@ class ONNXTextDetector(YOLOTextDetector):
         self.active_providers = self.providers
         
         if self.onnx_path and self.onnx_path.exists():
+            from ..core.security import is_model_trusted, is_registered_detector
+            if (is_registered_detector(self.onnx_path.name) or is_registered_detector(self.base_model_path)) and not is_model_trusted(self.onnx_path, self.onnx_path.name) and not self.allow_unverified:
+                raise ModelNotFoundError(
+                    f"ONNX model '{self.onnx_path.name}' failed trust verification before session creation. "
+                    "Refusing to execute unverified ONNX weights."
+                )
             try:
                 session = ort.InferenceSession(str(self.onnx_path), providers=self.providers)
                 actual = session.get_providers()
@@ -120,7 +139,7 @@ class ONNXTextDetector(YOLOTextDetector):
                 self.session = session
                 self.active_provider = actual[0] if actual else 'CPUExecutionProvider'
             except Exception as e:
-                if isinstance(e, DirectMLError):
+                if isinstance(e, (DirectMLError, ModelNotFoundError)):
                     raise
                 if is_dml:
                     raise DirectMLError(f"Failed to create DirectML session: {e}") from e
@@ -182,6 +201,18 @@ class ONNXTextDetector(YOLOTextDetector):
             exported_path = Path(path)
             if exported_path.exists():
                 self.onnx_path = exported_path
+                # Record provenance linking exported ONNX to approved base model
+                try:
+                    from ..core.security import compute_file_sha256, record_approved_model
+                    parent_sha = compute_file_sha256(self.model_path) if self.model_path else None
+                    record_approved_model(
+                        exported_path.name,
+                        exported_path,
+                        source_url="local_export",
+                        parent_sha256=parent_sha
+                    )
+                except Exception as trust_err:
+                    logger.warning(f"Could not record trust for exported ONNX model: {trust_err}")
                 return
         except Exception as e:
             logger.error(f"ONNX Export failed: {e}")
