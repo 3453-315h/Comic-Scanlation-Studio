@@ -1,0 +1,3 @@
+## 2024-05-24 - External API Connection Pooling
+**Learning:** The application runs background translation tasks in short-lived WorkerThread instances. Creating a new TLS handshake per translation request to DeepL or OpenAI via `requests.post()` or new `OpenAI()` instances was a bottleneck, especially given that many comic text blocks are translated in sequence.
+**Action:** Implemented connection pooling using `requests.Session()` and reused `OpenAI` client instances for synchronous external API calls. Avoided pooling asynchronous clients like `googletrans.Translator` to prevent event loop thread-safety issues across workers.
