@@ -1,0 +1,3 @@
+## 2024-05-24 - Connection Pooling for External Translators
+**Learning:** The application's architecture processes translation background tasks in short-lived WorkerThread instances, meaning each task operates in a new asyncio event loop. Therefore, we should not cache asyncio-dependent clients (like googletrans) to avoid thread-safety event-loop issues, but we CAN and SHOULD pool synchronous clients (like requests.Session and OpenAI) to avoid repeated TLS handshakes for massive performance gains when processing many texts.
+**Action:** Always maintain connection pooling/reuse for synchronous external API clients by making them instance variables, but strictly instantiate asynchronous clients locally per-request if they will be invoked on different threads/event loops.
