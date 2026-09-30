@@ -1,0 +1,3 @@
+## 2024-09-30 - Accessible Interactive UI Widgets
+**Learning:** PySide6/Qt desktop app accessibility often requires explicit configurations for screen readers that differ from standard web HTML (e.g. using setAccessibleName rather than ARIA). When applying accessible names, decorative elements like emojis should be strictly omitted to provide clear auditory readouts, otherwise screen readers will confusingly announce the unicode names of the emojis to visually impaired users.
+**Action:** Always set setAccessibleName on interactive PySide6 widgets without emojis, ensuring clean and semantic screen reader narration. Add visual UX improvements like pointing hand cursors via setCursor on hover as well.
