@@ -31,7 +31,9 @@ class BatchProcessDialog(QDialog):
         # Buttons to select all/none
         sel_btn_layout = QHBoxLayout()
         btn_all = QPushButton("Select All")
+        btn_all.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_none = QPushButton("Select None")
+        btn_none.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_all.clicked.connect(self.select_all)
         btn_none.clicked.connect(self.select_none)
         sel_btn_layout.addWidget(btn_all)
@@ -75,8 +77,10 @@ class BatchProcessDialog(QDialog):
         # 4. Action Buttons
         btn_layout = QHBoxLayout()
         self.btn_run = QPushButton("Start Processing")
+        self.btn_run.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_run.clicked.connect(self.run_process)
         self.btn_close = QPushButton("Close")
+        self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_close.clicked.connect(self.reject)
         
         btn_layout.addStretch()
