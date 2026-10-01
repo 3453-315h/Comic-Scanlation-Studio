@@ -1,0 +1,3 @@
+## 2024-06-25 - Connection pooling in worker threads
+**Learning:** Re-instantiating HTTP clients (like `requests` and `OpenAI`) inside loops or batch processing steps forces repeated, slow TLS handshakes per call, leading to significant network bottlenecks. While asyncio-dependent clients cannot be pooled across threads safely, synchronous clients like `requests.Session` and the synchronous `OpenAI` client can be pooled and reused within short-lived worker threads.
+**Action:** Always use connection pooling (e.g. `requests.Session()` or reusing API client instances) via properties for external API calls, especially when they may be invoked multiple times sequentially as in batch processing pipelines.
