@@ -324,6 +324,8 @@ class Translator:
         self._nllb_tokenizer = None
         self._opus_model = None
         self._opus_tokenizer = None
+        self._session = requests.Session()
+        self._openai_client = None
         
         if api == "deepl":
             from dotenv import load_dotenv
@@ -480,7 +482,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params, timeout=30)
+            response = self._session.post(url, data=params, timeout=30)
             response.raise_for_status()
             data = response.json()
             translations = data.get("translations", [])
@@ -498,7 +500,8 @@ class Translator:
         
         try:
             from openai import OpenAI
-            client = OpenAI(api_key=self.api_key)
+            if self._openai_client is None:
+                self._openai_client = OpenAI(api_key=self.api_key)
             
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
 Maintain the tone and style appropriate for comics.
@@ -508,7 +511,7 @@ Text: "{text}"
 
 Translation:"""
             
-            response = client.chat.completions.create(
+            response = self._openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=500,
