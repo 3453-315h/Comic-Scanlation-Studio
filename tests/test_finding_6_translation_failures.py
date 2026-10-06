@@ -32,7 +32,7 @@ def test_network_error_raises_backend_error():
     """Network connection failure must raise TranslationBackendError, not return original text."""
     translator = Translator(backend="google")
     
-    with patch("requests.get", side_effect=Exception("Connection refused")):
+    with patch("googletrans.Translator.translate", side_effect=Exception("Connection refused")):
         with pytest.raises(TranslationBackendError):
             translator.translate("テスト")
 

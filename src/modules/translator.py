@@ -352,6 +352,9 @@ class Translator:
             self.cache.quarantine_path = getattr(e, 'quarantine_path', None)
         self.cache_file = self.cache.cache_file
         
+        # Use a requests Session for connection pooling to speed up API calls during batch processing
+        self._session = requests.Session()
+
         logger.info(f"Translator initialized with backend: {api}")
         
     def _load_cache(self) -> dict:
@@ -480,7 +483,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params, timeout=30)
+            response = self._session.post(url, data=params, timeout=30)
             response.raise_for_status()
             data = response.json()
             translations = data.get("translations", [])
