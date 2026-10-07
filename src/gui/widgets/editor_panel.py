@@ -21,6 +21,7 @@ class WorkflowButton(QPushButton):
         self.setProperty("class", "workflow-button")
         self.setMinimumHeight(56)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAccessibleName(title)
         
         self._title = title
         self._subtitle = subtitle
@@ -92,6 +93,7 @@ class EditorPanel(QWidget):
         self.add_bubble_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_bubble_btn.setCheckable(True)
         self.add_bubble_btn.setObjectName("SecondaryButton")
+        self.add_bubble_btn.setAccessibleName("Add Bubble")
         self.add_bubble_btn.clicked.connect(self._on_add_bubble_toggled)
         layout.addWidget(self.add_bubble_btn)
         
@@ -103,6 +105,7 @@ class EditorPanel(QWidget):
         self.edit_text_btn = QPushButton("✏️ Edit Text")
         self.edit_text_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.edit_text_btn.setObjectName("SecondaryButton") 
+        self.edit_text_btn.setAccessibleName("Edit Text")
         self.edit_text_btn.clicked.connect(self.edit_text_clicked.emit)
         layout.addWidget(self.edit_text_btn)
         
@@ -134,6 +137,8 @@ class EditorPanel(QWidget):
         self.process_all_btn = QPushButton("▶️  Process All Stages")
         self.process_all_btn.setObjectName("PrimaryButton")
         self.process_all_btn.setMinimumHeight(48)
+        self.process_all_btn.setAccessibleName("Process All Stages")
+        self.process_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.process_all_btn.clicked.connect(self.process_all_clicked.emit)
         layout.addWidget(self.process_all_btn)
         
