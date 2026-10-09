@@ -325,16 +325,25 @@ class Translator:
         self._opus_model = None
         self._opus_tokenizer = None
         
+        # Pooled network clients for batch performance
+        self._session = None
+        self._openai_client = None
+
         if api == "deepl":
             from dotenv import load_dotenv
             import os
             load_dotenv()
             self.api_key = os.getenv("DEEPL_API_KEY")
+            if self.api_key:
+                self._session = requests.Session()
         elif api == "openai":
             from dotenv import load_dotenv
             import os
             load_dotenv()
             self.api_key = os.getenv("OPENAI_API_KEY")
+            if self.api_key:
+                from openai import OpenAI
+                self._openai_client = OpenAI(api_key=self.api_key)
         
         # Persistent thread/process safe disk cache
         try:
@@ -473,6 +482,9 @@ class Translator:
             raise MissingCredentialsError("DeepL API key is missing.")
         
         try:
+            if self._session is None:
+                self._session = requests.Session()
+
             url = "https://api-free.deepl.com/v2/translate"
             params = {
                 "auth_key": self.api_key,
@@ -480,7 +492,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params, timeout=30)
+            response = self._session.post(url, data=params, timeout=30)
             response.raise_for_status()
             data = response.json()
             translations = data.get("translations", [])
@@ -497,8 +509,9 @@ class Translator:
             raise MissingCredentialsError("OpenAI API key is missing.")
         
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=self.api_key)
+            if self._openai_client is None:
+                from openai import OpenAI
+                self._openai_client = OpenAI(api_key=self.api_key)
             
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
 Maintain the tone and style appropriate for comics.
@@ -508,7 +521,7 @@ Text: "{text}"
 
 Translation:"""
             
-            response = client.chat.completions.create(
+            response = self._openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=500,
