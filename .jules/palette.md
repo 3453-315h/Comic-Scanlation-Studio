@@ -1,0 +1,3 @@
+## 2024-06-25 - Pointer Cursor and Accessible Names for TopBar Buttons
+**Learning:** PySide6 UI elements like `QPushButton` and `QCheckBox` need `setCursor(Qt.CursorShape.PointingHandCursor)` to give visual feedback that they are interactive, which is especially important for elements acting as links or top bar controls. Additionally, buttons with emojis in their text need clean `setAccessibleName` values to prevent screen readers from reading out the emojis, and we need to use `setToolTip` as well.
+**Action:** When adding or modifying interactive UI components in PySide6, always ensure the cursor is updated for hover feedback and accessible names are properly set without emojis.
