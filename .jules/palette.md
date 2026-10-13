@@ -1,0 +1,3 @@
+## 2023-10-13 - TopBar Accessibility and Interaction Polish
+**Learning:** Adding accessible names specifically omitting emojis ensures clean screen reader readouts for UI components originally using text-based icon indicators like "➕ New Project". Ensuring `PointingHandCursor` for interactable top bar elements reinforces desktop application discoverability.
+**Action:** When working on navigation or option bars in Qt, check that visually styled or emoji-based buttons are given clear textual `setAccessibleName` descriptions, and always add cursor state hints to make them distinct from static UI frames.
