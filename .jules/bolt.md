@@ -1,0 +1,3 @@
+## 2024-03-24 - API Client Connection Pooling
+**Learning:** External API clients (OpenAI, HTTP requests) in the translator are re-instantiated for every single translation request instead of being persisted. This causes significant performance overhead (DNS lookup, TLS handshake) on batch translations since each request has to establish a new connection.
+**Action:** Use connection pooling for external APIs (e.g. initialize OpenAI client once in `__init__`, use `requests.Session()` instead of `requests.post()`). Keep in mind event loop threads if async clients are used, but OpenAI Python client handles HTTPX pooling synchronously fine when initialized once.
