@@ -1,0 +1,3 @@
+## 2023-10-25 - Connection Pooling for API Translations
+**Learning:** Instantiating new HTTP clients (`requests.post` and `OpenAI()`) for each translation call in a batch processing pipeline causes significant overhead due to repeated TLS handshakes, slowing down the batch job.
+**Action:** Use `requests.Session()` and reuse the `OpenAI` client instance across requests to enable connection pooling and keep-alive, significantly speeding up multiple API translations. Note: this is safe because these are synchronous clients, unlike `googletrans.Translator` which uses `asyncio` and cannot be safely pooled across `WorkerThread` instances in this architecture.
