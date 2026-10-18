@@ -1,0 +1,3 @@
+## 2023-10-18 - Translator API Call Optimization
+**Learning:** External API calls for DeepL and OpenAI translations are currently being made without HTTP connection pooling (e.g., using `requests.post` and instantiating `OpenAI(api_key=self.api_key)` every time `translate` is called). This forces repeated TLS handshakes, which can be a significant bottleneck for high-latency calls, especially when translating large amounts of text sequentially in a loop or batch process.
+**Action:** Implement connection pooling by using `requests.Session` for HTTP calls and instantiating the OpenAI client once, reusing them across subsequent calls in the `Translator` instance.
