@@ -21,6 +21,7 @@ class WorkflowButton(QPushButton):
         self.setProperty("class", "workflow-button")
         self.setMinimumHeight(56)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAccessibleName(f"{title} - {subtitle}" if subtitle else title)
         
         self._title = title
         self._subtitle = subtitle
@@ -153,6 +154,8 @@ class EditorPanel(QWidget):
         font_row = QHBoxLayout()
         
         self.font_family = QComboBox()
+        self.font_family.setToolTip("Font Family")
+        self.font_family.setAccessibleName("Font Family")
         self.font_family.addItems([
             "Arial", "Comic Sans MS", "CC Wild Words", 
             "Anime Ace", "Bangers", "Impact"
@@ -161,6 +164,8 @@ class EditorPanel(QWidget):
         font_row.addWidget(self.font_family, stretch=2)
         
         self.font_size = QSpinBox()
+        self.font_size.setToolTip("Font Size")
+        self.font_size.setAccessibleName("Font Size")
         self.font_size.setRange(8, 72)
         self.font_size.setValue(24)
         self.font_size.setSuffix("px")
@@ -176,6 +181,9 @@ class EditorPanel(QWidget):
         self.bold_btn.setFixedSize(32, 32)
         self.bold_btn.setCheckable(True)
         self.bold_btn.setStyleSheet("font-weight: bold;")
+        self.bold_btn.setToolTip("Bold")
+        self.bold_btn.setAccessibleName("Bold")
+        self.bold_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.bold_btn.clicked.connect(self.font_bold_clicked.emit)
         style_row.addWidget(self.bold_btn)
         
@@ -183,6 +191,9 @@ class EditorPanel(QWidget):
         self.italic_btn.setFixedSize(32, 32)
         self.italic_btn.setCheckable(True)
         self.italic_btn.setStyleSheet("font-style: italic;")
+        self.italic_btn.setToolTip("Italic")
+        self.italic_btn.setAccessibleName("Italic")
+        self.italic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.italic_btn.clicked.connect(self.font_italic_clicked.emit)
         style_row.addWidget(self.italic_btn)
         
