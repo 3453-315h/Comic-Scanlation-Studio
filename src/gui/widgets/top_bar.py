@@ -37,6 +37,8 @@ class TopBar(QWidget):
         
         # Left section - Navigation
         self.home_btn = QPushButton("➕ New Project")
+        self.home_btn.setAccessibleName("New Project")
+        self.home_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.home_btn.setObjectName("TopBarButton")
         self.home_btn.clicked.connect(self.home_clicked.emit)
         layout.addWidget(self.home_btn)
@@ -47,6 +49,8 @@ class TopBar(QWidget):
         layout.addWidget(separator1)
         
         self.reset_btn = QPushButton("Reset Session")
+        self.reset_btn.setAccessibleName("Reset Session")
+        self.reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.reset_btn.setObjectName("TopBarButton")
         self.reset_btn.setStyleSheet("text-decoration: underline;")
         self.reset_btn.clicked.connect(self.reset_clicked.emit)
@@ -54,11 +58,15 @@ class TopBar(QWidget):
         
         # Undo/Redo
         self.undo_btn = QPushButton("↩️ Undo")
+        self.undo_btn.setAccessibleName("Undo")
+        self.undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.undo_btn.setObjectName("TopBarButton")
         self.undo_btn.clicked.connect(self.undo_clicked.emit)
         layout.addWidget(self.undo_btn)
         
         self.redo_btn = QPushButton("↪️ Redo")
+        self.redo_btn.setAccessibleName("Redo")
+        self.redo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.redo_btn.setObjectName("TopBarButton")
         self.redo_btn.clicked.connect(self.redo_clicked.emit)
         layout.addWidget(self.redo_btn)
@@ -75,12 +83,16 @@ class TopBar(QWidget):
         
         # Right section - Options
         self.zoom_out_btn = QPushButton("➖")
+        self.zoom_out_btn.setAccessibleName("Zoom Out")
+        self.zoom_out_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.zoom_out_btn.setObjectName("TopBarButton")
         self.zoom_out_btn.setToolTip("Zoom Out")
         self.zoom_out_btn.clicked.connect(self.zoom_out_clicked.emit)
         layout.addWidget(self.zoom_out_btn)
 
         self.zoom_in_btn = QPushButton("➕")
+        self.zoom_in_btn.setAccessibleName("Zoom In")
+        self.zoom_in_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.zoom_in_btn.setObjectName("TopBarButton")
         self.zoom_in_btn.setToolTip("Zoom In")
         self.zoom_in_btn.clicked.connect(self.zoom_in_clicked.emit)
@@ -100,6 +112,8 @@ class TopBar(QWidget):
         layout.addWidget(separator2)
         
         self.settings_btn = QPushButton("⚙️")
+        self.settings_btn.setAccessibleName("Settings")
+        self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.settings_btn.setObjectName("TopBarButton")
         self.settings_btn.setToolTip("Settings")
         self.settings_btn.clicked.connect(self.settings_clicked.emit)

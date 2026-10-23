@@ -205,6 +205,8 @@ class PageCarousel(QWidget):
         upload_layout.setContentsMargins(0, 0, 0, 0)
         
         self.upload_btn = QPushButton("📁 Upload Images")
+        self.upload_btn.setAccessibleName("Upload Images")
+        self.upload_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.upload_btn.setObjectName("PrimaryButton")
         self.upload_btn.setMinimumWidth(140)
         self.upload_btn.setMinimumHeight(48)

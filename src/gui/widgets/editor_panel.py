@@ -89,6 +89,7 @@ class EditorPanel(QWidget):
         
         # Add Bubble Button (Manual Creation)
         self.add_bubble_btn = QPushButton("➕ Add Bubble")
+        self.add_bubble_btn.setAccessibleName("Add Bubble")
         self.add_bubble_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_bubble_btn.setCheckable(True)
         self.add_bubble_btn.setObjectName("SecondaryButton")
@@ -101,6 +102,7 @@ class EditorPanel(QWidget):
         
         # Edit Text Button (Small)
         self.edit_text_btn = QPushButton("✏️ Edit Text")
+        self.edit_text_btn.setAccessibleName("Edit Text")
         self.edit_text_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.edit_text_btn.setObjectName("SecondaryButton") 
         self.edit_text_btn.clicked.connect(self.edit_text_clicked.emit)
@@ -132,6 +134,8 @@ class EditorPanel(QWidget):
         
         # Process All Button
         self.process_all_btn = QPushButton("▶️  Process All Stages")
+        self.process_all_btn.setAccessibleName("Process All Stages")
+        self.process_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.process_all_btn.setObjectName("PrimaryButton")
         self.process_all_btn.setMinimumHeight(48)
         self.process_all_btn.clicked.connect(self.process_all_clicked.emit)
@@ -173,6 +177,9 @@ class EditorPanel(QWidget):
         style_row = QHBoxLayout()
         
         self.bold_btn = QPushButton("B")
+        self.bold_btn.setAccessibleName("Bold")
+        self.bold_btn.setToolTip("Bold text")
+        self.bold_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.bold_btn.setFixedSize(32, 32)
         self.bold_btn.setCheckable(True)
         self.bold_btn.setStyleSheet("font-weight: bold;")
@@ -180,6 +187,9 @@ class EditorPanel(QWidget):
         style_row.addWidget(self.bold_btn)
         
         self.italic_btn = QPushButton("I")
+        self.italic_btn.setAccessibleName("Italic")
+        self.italic_btn.setToolTip("Italic text")
+        self.italic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.italic_btn.setFixedSize(32, 32)
         self.italic_btn.setCheckable(True)
         self.italic_btn.setStyleSheet("font-style: italic;")
@@ -191,6 +201,7 @@ class EditorPanel(QWidget):
         
         # Auto-fit checkbox
         self.auto_fit_check = QCheckBox("Auto-fit text to bubble")
+        self.auto_fit_check.setCursor(Qt.CursorShape.PointingHandCursor)
         self.auto_fit_check.setChecked(True)
         layout.addWidget(self.auto_fit_check)
         
