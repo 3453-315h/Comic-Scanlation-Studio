@@ -1,0 +1,3 @@
+## 2026-08-27 - PySide6 Micro-UX Conversions
+**Learning:** In desktop Qt/PySide6 applications, web-based accessibility and interaction patterns must be mapped correctly. ARIA labels translate to `setAccessibleName()`, missing CSS hover states can be addressed via `setCursor(Qt.CursorShape.PointingHandCursor)`, and titles map to `setToolTip()`. These simple properties significantly improve accessibility and tactile feedback for standard buttons.
+**Action:** When asked for micro-UX or accessibility improvements in a PySide6 app, immediately check toolbars and icon buttons for missing `setAccessibleName()`, `setToolTip()`, and `setCursor()` settings.
