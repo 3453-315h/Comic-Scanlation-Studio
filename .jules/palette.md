@@ -1,0 +1,3 @@
+## 2023-09-13 - Qt Accessibility and Hover States
+**Learning:** In PySide6 applications, `aria-label` equivalent is `setAccessibleName()`. When adding accessible names to buttons containing emojis, explicitly stripping the emojis ensures a cleaner auditory readout for screen readers. Furthermore, adding `setCursor(Qt.CursorShape.PointingHandCursor)` to interactive elements provides essential visual affordance that is sometimes missing by default in Qt widgets compared to web components.
+**Action:** Always verify if Qt interactive elements have pointing cursors on hover and ensure their `AccessibleName` omits visual-only characters like emojis.
