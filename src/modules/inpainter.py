@@ -587,7 +587,6 @@ class Inpainter:
         if mask_coverage < 0.005:
             logger.debug(f"Text mask empty ({mask_coverage:.1%}). No text found to inpaint.")
             # Do NOT erase the whole box, just return the empty mask to prevent destroying the bubble.
-            pass
             
         mask[y1:y2, x1:x2] = text_mask
         
