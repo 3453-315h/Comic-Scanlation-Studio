@@ -569,9 +569,6 @@ class Inpainter:
             
             # Dilate the text mask to encompass the blurry edges
             text_mask = cv2.dilate(text_mask, kernel_expand, iterations=1)
-        else:
-            # Empty mask
-            pass
         
         # 5. Fill internal holes (e.g., inside O, P, D)
         contours, hierarchy = cv2.findContours(text_mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
@@ -587,7 +584,6 @@ class Inpainter:
         if mask_coverage < 0.005:
             logger.debug(f"Text mask empty ({mask_coverage:.1%}). No text found to inpaint.")
             # Do NOT erase the whole box, just return the empty mask to prevent destroying the bubble.
-            pass
             
         mask[y1:y2, x1:x2] = text_mask
         
