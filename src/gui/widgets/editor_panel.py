@@ -84,11 +84,13 @@ class EditorPanel(QWidget):
         
         # Workflow Buttons
         self.detect_btn = WorkflowButton("🔍", "Detect Speech Bubbles", "Find text regions")
+        self.detect_btn.setAccessibleName("Detect Speech Bubbles")
         self.detect_btn.clicked.connect(self.detect_clicked.emit)
         layout.addWidget(self.detect_btn)
         
         # Add Bubble Button (Manual Creation)
         self.add_bubble_btn = QPushButton("➕ Add Bubble")
+        self.add_bubble_btn.setAccessibleName("Add Bubble")
         self.add_bubble_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_bubble_btn.setCheckable(True)
         self.add_bubble_btn.setObjectName("SecondaryButton")
@@ -96,29 +98,35 @@ class EditorPanel(QWidget):
         layout.addWidget(self.add_bubble_btn)
         
         self.ocr_btn = WorkflowButton("📝", "OCR Text", "OCR recognition")
+        self.ocr_btn.setAccessibleName("OCR Text")
         self.ocr_btn.clicked.connect(self.ocr_clicked.emit)
         layout.addWidget(self.ocr_btn)
         
         # Edit Text Button (Small)
         self.edit_text_btn = QPushButton("✏️ Edit Text")
+        self.edit_text_btn.setAccessibleName("Edit Text")
         self.edit_text_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.edit_text_btn.setObjectName("SecondaryButton") 
         self.edit_text_btn.clicked.connect(self.edit_text_clicked.emit)
         layout.addWidget(self.edit_text_btn)
         
         self.translate_btn = WorkflowButton("🌐", "Translate", "Convert to target language")
+        self.translate_btn.setAccessibleName("Translate")
         self.translate_btn.clicked.connect(self.translate_clicked.emit)
         layout.addWidget(self.translate_btn)
         
         self.inpaint_btn = WorkflowButton("🎨", "Inpaint", "Remove original text")
+        self.inpaint_btn.setAccessibleName("Inpaint")
         self.inpaint_btn.clicked.connect(self.inpaint_clicked.emit)
         layout.addWidget(self.inpaint_btn)
         
         self.imprint_btn = WorkflowButton("✍️", "Imprint", "Render translated text")
+        self.imprint_btn.setAccessibleName("Imprint")
         self.imprint_btn.clicked.connect(self.imprint_clicked.emit)
         layout.addWidget(self.imprint_btn)
         
         self.export_btn = WorkflowButton("💾", "Export", "Save final image with text")
+        self.export_btn.setAccessibleName("Export")
         self.export_btn.clicked.connect(self.export_clicked.emit)
         layout.addWidget(self.export_btn)
         
@@ -133,6 +141,8 @@ class EditorPanel(QWidget):
         # Process All Button
         self.process_all_btn = QPushButton("▶️  Process All Stages")
         self.process_all_btn.setObjectName("PrimaryButton")
+        self.process_all_btn.setAccessibleName("Process All Stages")
+        self.process_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.process_all_btn.setMinimumHeight(48)
         self.process_all_btn.clicked.connect(self.process_all_clicked.emit)
         layout.addWidget(self.process_all_btn)
@@ -175,6 +185,8 @@ class EditorPanel(QWidget):
         self.bold_btn = QPushButton("B")
         self.bold_btn.setFixedSize(32, 32)
         self.bold_btn.setCheckable(True)
+        self.bold_btn.setAccessibleName("Bold")
+        self.bold_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.bold_btn.setStyleSheet("font-weight: bold;")
         self.bold_btn.clicked.connect(self.font_bold_clicked.emit)
         style_row.addWidget(self.bold_btn)
@@ -182,6 +194,8 @@ class EditorPanel(QWidget):
         self.italic_btn = QPushButton("I")
         self.italic_btn.setFixedSize(32, 32)
         self.italic_btn.setCheckable(True)
+        self.italic_btn.setAccessibleName("Italic")
+        self.italic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.italic_btn.setStyleSheet("font-style: italic;")
         self.italic_btn.clicked.connect(self.font_italic_clicked.emit)
         style_row.addWidget(self.italic_btn)

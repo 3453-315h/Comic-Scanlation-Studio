@@ -1,0 +1,3 @@
+## 2023-10-27 - Setting Accessible Names on PySide6 Buttons with Emojis
+**Learning:** PySide6 screen readers read out the text on buttons which can include the emojis if not handled properly. Using emojis as icons combined with text can mess up auditory readouts. The `setAccessibleName` method correctly bypasses this text and acts as an ARIA-like label. Also, when an element is meant to be interactive like a button, `setCursor(Qt.CursorShape.PointingHandCursor)` gives excellent native visual feedback.
+**Action:** Always set `setAccessibleName()` without emojis on widgets, and set `setCursor(Qt.CursorShape.PointingHandCursor)` on buttons for PySide6 applications.
