@@ -25,6 +25,7 @@ class WorkflowButton(QPushButton):
         self._title = title
         self._subtitle = subtitle
         self._emoji = emoji
+        self.setAccessibleName(title)
         self._update_text()
         
     def _update_text(self):
@@ -89,6 +90,7 @@ class EditorPanel(QWidget):
         
         # Add Bubble Button (Manual Creation)
         self.add_bubble_btn = QPushButton("➕ Add Bubble")
+        self.add_bubble_btn.setAccessibleName("Add Bubble")
         self.add_bubble_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_bubble_btn.setCheckable(True)
         self.add_bubble_btn.setObjectName("SecondaryButton")
@@ -101,6 +103,7 @@ class EditorPanel(QWidget):
         
         # Edit Text Button (Small)
         self.edit_text_btn = QPushButton("✏️ Edit Text")
+        self.edit_text_btn.setAccessibleName("Edit Text")
         self.edit_text_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.edit_text_btn.setObjectName("SecondaryButton") 
         self.edit_text_btn.clicked.connect(self.edit_text_clicked.emit)
@@ -132,6 +135,7 @@ class EditorPanel(QWidget):
         
         # Process All Button
         self.process_all_btn = QPushButton("▶️  Process All Stages")
+        self.process_all_btn.setAccessibleName("Process All Stages")
         self.process_all_btn.setObjectName("PrimaryButton")
         self.process_all_btn.setMinimumHeight(48)
         self.process_all_btn.clicked.connect(self.process_all_clicked.emit)
@@ -239,9 +243,11 @@ class EditorPanel(QWidget):
         self.add_bubble_toggled.emit(checked)
         if checked:
             self.add_bubble_btn.setText("Cancel Adding")
+            self.add_bubble_btn.setAccessibleName("Cancel Adding")
             self.add_bubble_btn.setStyleSheet("background-color: #3d3f42; border: 1px solid #7FBBFF;")
         else:
             self.add_bubble_btn.setText("➕ Add Bubble")
+            self.add_bubble_btn.setAccessibleName("Add Bubble")
             self.add_bubble_btn.setStyleSheet("")
     
     def set_status(self, message: str):
