@@ -186,9 +186,15 @@ class Inpainter:
         # Create combined mask representing ONLY the text pixels
         mask = np.zeros((h, w), dtype=np.uint8)
         for bbox in bboxes:
+            x1, y1, x2, y2 = bbox
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(w, x2), min(h, y2)
+            if x1 >= x2 or y1 >= y2:
+                continue
+
             # Use intelligent text masking to keep the bubble background
-            text_mask = self._create_text_mask(image, bbox)
-            mask = cv2.bitwise_or(mask, text_mask)
+            roi_mask = self._create_text_mask(image, bbox, return_roi_only=True)
+            mask[y1:y2, x1:x2] = cv2.bitwise_or(mask[y1:y2, x1:x2], roi_mask)
         
         # Dilate slightly more for LaMa to ensure clean removal
         # (Already dilated in _create_text_mask, but LaMa likes a bit more context)
@@ -284,8 +290,8 @@ class Inpainter:
                 continue
 
             try:
-                mask = self._create_text_mask(image, bbox)
-                combined_mask = cv2.bitwise_or(combined_mask, mask)
+                roi_mask = self._create_text_mask(image, bbox, return_roi_only=True)
+                combined_mask[y1:y2, x1:x2] = cv2.bitwise_or(combined_mask[y1:y2, x1:x2], roi_mask)
                 valid_regions += 1
             except Exception as e:
                 logger.error(f"Failed to create mask for bbox {bbox}: {e}")
@@ -311,7 +317,7 @@ class Inpainter:
                     x2, y2 = min(w, x2), min(h, y2)
                     
                     try:
-                        roi_text_mask = self._create_text_mask(image, bbox)[y1:y2, x1:x2]
+                        roi_text_mask = self._create_text_mask(image, bbox, return_roi_only=True)
                     except: continue
                     
                     if roi_text_mask.sum() == 0: continue
@@ -406,7 +412,7 @@ class Inpainter:
         
         return result
     
-    def _create_text_mask(self, image: np.ndarray, bbox: list) -> np.ndarray:
+    def _create_text_mask(self, image: np.ndarray, bbox: list, return_roi_only: bool = False) -> np.ndarray:
         """Create intelligent mask for text region with multi-method thresholding.
         
         Uses a combined approach:
@@ -421,14 +427,15 @@ class Inpainter:
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w, x2), min(h, y2)
         
-        mask = np.zeros((h, w), dtype=np.uint8)
         region = image[y1:y2, x1:x2]
-        
-        if region.size == 0:
-            return mask
-        
         roi_h, roi_w = region.shape[:2]
-        if roi_h < 2 or roi_w < 2:
+        
+        if not return_roi_only:
+            mask = np.zeros((h, w), dtype=np.uint8)
+        
+        if region.size == 0 or roi_h < 2 or roi_w < 2:
+            if return_roi_only:
+                return np.zeros((roi_h, roi_w), dtype=np.uint8) if roi_h > 0 and roi_w > 0 else np.array([], dtype=np.uint8)
             return mask
         
         # Convert to grayscale
@@ -589,27 +596,26 @@ class Inpainter:
             # Do NOT erase the whole box, just return the empty mask to prevent destroying the bubble.
             pass
             
-        mask[y1:y2, x1:x2] = text_mask
-        
         # ── Refinement for White Fill Mode ──
         if self.whiten_mode:
             try:
                 # Ensure the entire mask is super solid if we are just going to paint it white
-                roi_mask = mask[y1:y2, x1:x2]
-                if roi_mask.shape[0] >= 3 and roi_mask.shape[1] >= 3:
+                if text_mask.shape[0] >= 3 and text_mask.shape[1] >= 3:
                     k_dilate = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-                    mask[y1:y2, x1:x2] = cv2.dilate(roi_mask, k_dilate, iterations=1)
+                    text_mask = cv2.dilate(text_mask, k_dilate, iterations=1)
             except Exception as e:
                 logger.warning(f"Mask refinement failed for bbox {bbox}: {e}")
 
         # ── Smooth mask edges (Optimized for ROI only) ──
         if self.mask_blur > 0:
-            roi_mask = mask[y1:y2, x1:x2]
-            if roi_mask.size > 0:
-                blurred = cv2.GaussianBlur(roi_mask, (self.mask_blur, self.mask_blur), 0)
-                _, roi_mask = cv2.threshold(blurred, 127, 255, cv2.THRESH_BINARY)
-                mask[y1:y2, x1:x2] = roi_mask
-        
+            if text_mask.size > 0:
+                blurred = cv2.GaussianBlur(text_mask, (self.mask_blur, self.mask_blur), 0)
+                _, text_mask = cv2.threshold(blurred, 127, 255, cv2.THRESH_BINARY)
+
+        if return_roi_only:
+            return text_mask
+
+        mask[y1:y2, x1:x2] = text_mask
         return mask
 
 
