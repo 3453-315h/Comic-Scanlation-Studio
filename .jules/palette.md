@@ -1,0 +1,3 @@
+## $(date +%Y-%m-%d) - PySide6 TopBar Navigation Accessibility
+**Learning:** In PySide6 applications, top navigation bars with icon/emoji-only buttons (like "➕", "➖", "⚙️") require `setAccessibleName()` for screen readers and `setToolTip()` for visual users. Furthermore, applying `setCursor(Qt.CursorShape.PointingHandCursor)` to all clickable widgets provides crucial micro-interaction feedback.
+**Action:** When implementing or refining PySide6 toolbars/navigation components, systematically apply `setAccessibleName()`, `setToolTip()`, and `setCursor()` to all interactive elements to ensure a unified and accessible micro-UX.
