@@ -158,6 +158,8 @@ class EditorPanel(QWidget):
             "Anime Ace", "Bangers", "Impact"
         ])
         self.font_family.currentTextChanged.connect(self._on_font_changed)
+        self.font_family.setAccessibleName("Font Family")
+        self.font_family.setToolTip("Select font family")
         font_row.addWidget(self.font_family, stretch=2)
         
         self.font_size = QSpinBox()
@@ -165,6 +167,8 @@ class EditorPanel(QWidget):
         self.font_size.setValue(24)
         self.font_size.setSuffix("px")
         self.font_size.valueChanged.connect(self._on_font_changed)
+        self.font_size.setAccessibleName("Font Size")
+        self.font_size.setToolTip("Select font size")
         font_row.addWidget(self.font_size, stretch=1)
         
         layout.addLayout(font_row)
@@ -177,6 +181,8 @@ class EditorPanel(QWidget):
         self.bold_btn.setCheckable(True)
         self.bold_btn.setStyleSheet("font-weight: bold;")
         self.bold_btn.clicked.connect(self.font_bold_clicked.emit)
+        self.bold_btn.setAccessibleName("Toggle Bold")
+        self.bold_btn.setToolTip("Toggle Bold Font")
         style_row.addWidget(self.bold_btn)
         
         self.italic_btn = QPushButton("I")
@@ -184,6 +190,8 @@ class EditorPanel(QWidget):
         self.italic_btn.setCheckable(True)
         self.italic_btn.setStyleSheet("font-style: italic;")
         self.italic_btn.clicked.connect(self.font_italic_clicked.emit)
+        self.italic_btn.setAccessibleName("Toggle Italic")
+        self.italic_btn.setToolTip("Toggle Italic Font")
         style_row.addWidget(self.italic_btn)
         
         style_row.addStretch()
