@@ -21,6 +21,7 @@ class WorkflowButton(QPushButton):
         self.setProperty("class", "workflow-button")
         self.setMinimumHeight(56)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAccessibleName(title)
         
         self._title = title
         self._subtitle = subtitle
@@ -90,6 +91,7 @@ class EditorPanel(QWidget):
         # Add Bubble Button (Manual Creation)
         self.add_bubble_btn = QPushButton("➕ Add Bubble")
         self.add_bubble_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.add_bubble_btn.setAccessibleName("Add Bubble")
         self.add_bubble_btn.setCheckable(True)
         self.add_bubble_btn.setObjectName("SecondaryButton")
         self.add_bubble_btn.clicked.connect(self._on_add_bubble_toggled)
@@ -102,6 +104,7 @@ class EditorPanel(QWidget):
         # Edit Text Button (Small)
         self.edit_text_btn = QPushButton("✏️ Edit Text")
         self.edit_text_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.edit_text_btn.setAccessibleName("Edit Text")
         self.edit_text_btn.setObjectName("SecondaryButton") 
         self.edit_text_btn.clicked.connect(self.edit_text_clicked.emit)
         layout.addWidget(self.edit_text_btn)
@@ -133,6 +136,8 @@ class EditorPanel(QWidget):
         # Process All Button
         self.process_all_btn = QPushButton("▶️  Process All Stages")
         self.process_all_btn.setObjectName("PrimaryButton")
+        self.process_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.process_all_btn.setAccessibleName("Process All Stages")
         self.process_all_btn.setMinimumHeight(48)
         self.process_all_btn.clicked.connect(self.process_all_clicked.emit)
         layout.addWidget(self.process_all_btn)
@@ -174,6 +179,9 @@ class EditorPanel(QWidget):
         
         self.bold_btn = QPushButton("B")
         self.bold_btn.setFixedSize(32, 32)
+        self.bold_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.bold_btn.setAccessibleName("Bold")
+        self.bold_btn.setToolTip("Bold")
         self.bold_btn.setCheckable(True)
         self.bold_btn.setStyleSheet("font-weight: bold;")
         self.bold_btn.clicked.connect(self.font_bold_clicked.emit)
@@ -181,6 +189,9 @@ class EditorPanel(QWidget):
         
         self.italic_btn = QPushButton("I")
         self.italic_btn.setFixedSize(32, 32)
+        self.italic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.italic_btn.setAccessibleName("Italic")
+        self.italic_btn.setToolTip("Italic")
         self.italic_btn.setCheckable(True)
         self.italic_btn.setStyleSheet("font-style: italic;")
         self.italic_btn.clicked.connect(self.font_italic_clicked.emit)
