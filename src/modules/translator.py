@@ -324,7 +324,6 @@ class Translator:
         self._nllb_tokenizer = None
         self._opus_model = None
         self._opus_tokenizer = None
-        
         if api == "deepl":
             from dotenv import load_dotenv
             import os
@@ -335,6 +334,9 @@ class Translator:
             import os
             load_dotenv()
             self.api_key = os.getenv("OPENAI_API_KEY")
+
+        # Use a session to pool connections and avoid repeated TLS handshakes for performance
+        self._session = requests.Session()
         
         # Persistent thread/process safe disk cache
         try:
@@ -480,7 +482,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params, timeout=30)
+            response = self._session.post(url, data=params, timeout=30)
             response.raise_for_status()
             data = response.json()
             translations = data.get("translations", [])
