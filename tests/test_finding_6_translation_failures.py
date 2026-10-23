@@ -28,11 +28,20 @@ def test_unsupported_backend_raises_loudly():
     with pytest.raises(UnsupportedBackendError):
         translator.translate("Hello")
 
-def test_network_error_raises_backend_error():
+def test_network_error_raises_backend_error_google():
     """Network connection failure must raise TranslationBackendError, not return original text."""
     translator = Translator(backend="google")
     
     with patch("requests.get", side_effect=Exception("Connection refused")):
+        with pytest.raises(TranslationBackendError):
+            translator.translate("テスト")
+
+def test_network_error_raises_backend_error_deepl():
+    """Network connection failure must raise TranslationBackendError for DeepL backend."""
+    translator = Translator(backend="deepl")
+    translator.api_key = "dummy"
+
+    with patch("requests.Session.post", side_effect=Exception("Connection refused")):
         with pytest.raises(TranslationBackendError):
             translator.translate("テスト")
 
