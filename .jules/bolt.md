@@ -1,0 +1,3 @@
+## 2024-05-18 - Missing Connection Pooling in Translator API Backends
+**Learning:** `src/modules/translator.py` uses `requests.post` inside `_deepl_translate` and `OpenAI(api_key=self.api_key)` inside `_openai_translate` without using `requests.Session` or caching the OpenAI client. These methods are called sequentially in a loop during `process_page` in `pipeline.py`. Repeatedly opening new HTTP connections and doing TLS handshakes for each API call creates a significant bottleneck.
+**Action:** Always use connection pooling (like `requests.Session()`) or reuse client instances (like `OpenAI` client) when making external API calls in loops or batch processing.
