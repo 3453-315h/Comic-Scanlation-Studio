@@ -318,6 +318,8 @@ class Translator:
         self.source_lang = source_lang
         self.target_lang = target_lang
         self.api_key = None
+        self._session = None
+        self._openai_client = None
         
         # Lazy-loaded offline models
         self._nllb_model = None
@@ -472,6 +474,12 @@ class Translator:
         if not self.api_key:
             raise MissingCredentialsError("DeepL API key is missing.")
         
+        # Performance optimization: Use connection pooling (requests.Session) to avoid
+        # repeated TLS handshakes for every translation request in the worker thread.
+        # Lazy-loaded to avoid multiprocessing pickling issues during worker initialization.
+        if self._session is None:
+            self._session = requests.Session()
+
         try:
             url = "https://api-free.deepl.com/v2/translate"
             params = {
@@ -480,7 +488,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params, timeout=30)
+            response = self._session.post(url, data=params, timeout=30)
             response.raise_for_status()
             data = response.json()
             translations = data.get("translations", [])
@@ -498,7 +506,12 @@ class Translator:
         
         try:
             from openai import OpenAI
-            client = OpenAI(api_key=self.api_key)
+            # Performance optimization: Reuse OpenAI client instance to leverage
+            # its internal httpx connection pooling, avoiding repeated TLS handshakes.
+            # Lazy-loaded to ensure thread-safety and avoid pickling issues.
+            if self._openai_client is None:
+                self._openai_client = OpenAI(api_key=self.api_key)
+            client = self._openai_client
             
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
 Maintain the tone and style appropriate for comics.
