@@ -320,6 +320,7 @@ class DownloadModelsDialog(QDialog):
             # Download button
             is_downloaded = "✓" in status
             btn = QPushButton("✓ Downloaded" if is_downloaded else "Download")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setEnabled(not is_downloaded)
             btn.setProperty("model_index", row)
             btn.clicked.connect(lambda checked, r=row: self._download_model(r))
@@ -348,6 +349,7 @@ class DownloadModelsDialog(QDialog):
         btn_layout = QHBoxLayout()
         
         revoke_btn = QPushButton("Revoke Model Trust")
+        revoke_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         revoke_btn.setToolTip("Revoke stored cryptographic trust decisions for unpinned models")
         revoke_btn.clicked.connect(self._revoke_trust)
         btn_layout.addWidget(revoke_btn)
@@ -355,10 +357,12 @@ class DownloadModelsDialog(QDialog):
         btn_layout.addStretch()
         
         refresh_btn = QPushButton("Refresh Status")
+        refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         refresh_btn.clicked.connect(self.refresh_status)
         btn_layout.addWidget(refresh_btn)
         
         close_btn = QPushButton("Close")
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.clicked.connect(self.accept)
         btn_layout.addWidget(close_btn)
         
