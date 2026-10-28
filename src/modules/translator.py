@@ -352,8 +352,26 @@ class Translator:
             self.cache.quarantine_path = getattr(e, 'quarantine_path', None)
         self.cache_file = self.cache.cache_file
         
+        self._session_instance = None
+        self._openai_client_instance = None
+
         logger.info(f"Translator initialized with backend: {api}")
         
+    @property
+    def _session(self) -> requests.Session:
+        """Lazily initialize requests.Session for connection pooling."""
+        if self._session_instance is None:
+            self._session_instance = requests.Session()
+        return self._session_instance
+
+    @property
+    def _openai_client(self):
+        """Lazily initialize OpenAI client."""
+        if self._openai_client_instance is None:
+            from openai import OpenAI
+            self._openai_client_instance = OpenAI(api_key=self.api_key)
+        return self._openai_client_instance
+
     def _load_cache(self) -> dict:
         """Compatibility helper"""
         return self.cache._reload_from_disk()
@@ -480,7 +498,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params, timeout=30)
+            response = self._session.post(url, data=params, timeout=30)
             response.raise_for_status()
             data = response.json()
             translations = data.get("translations", [])
@@ -497,9 +515,6 @@ class Translator:
             raise MissingCredentialsError("OpenAI API key is missing.")
         
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=self.api_key)
-            
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
 Maintain the tone and style appropriate for comics.
 Context: {context or 'No context provided'}
@@ -508,7 +523,7 @@ Text: "{text}"
 
 Translation:"""
             
-            response = client.chat.completions.create(
+            response = self._openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=500,
