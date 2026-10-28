@@ -1,0 +1,3 @@
+## YYYY-MM-DD - Connection pooling
+**Learning:** External API calls (like DeepL and OpenAI) are made without connection pooling, creating a new TLS handshake for every translation call, which is very inefficient in batch processing. The instructions say we can pool synchronous clients (like requests.Session or OpenAI) across requests to avoid this, while making sure we lazily initialize to avoid multiprocessing pickling issues since these tasks run in worker threads.
+**Action:** Use a lazily initialized `requests.Session` for DeepL translations and a lazily initialized OpenAI client to improve performance. Also update test mocks if they depend on `requests.post` or `requests.get` directly for DeepL testing.
