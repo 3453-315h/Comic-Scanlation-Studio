@@ -132,6 +132,8 @@ class EditorPanel(QWidget):
         
         # Process All Button
         self.process_all_btn = QPushButton("▶️  Process All Stages")
+        self.process_all_btn.setAccessibleName("Process All Stages")
+        self.process_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.process_all_btn.setObjectName("PrimaryButton")
         self.process_all_btn.setMinimumHeight(48)
         self.process_all_btn.clicked.connect(self.process_all_clicked.emit)
@@ -173,6 +175,8 @@ class EditorPanel(QWidget):
         style_row = QHBoxLayout()
         
         self.bold_btn = QPushButton("B")
+        self.bold_btn.setAccessibleName("Bold")
+        self.bold_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.bold_btn.setFixedSize(32, 32)
         self.bold_btn.setCheckable(True)
         self.bold_btn.setStyleSheet("font-weight: bold;")
@@ -180,6 +184,8 @@ class EditorPanel(QWidget):
         style_row.addWidget(self.bold_btn)
         
         self.italic_btn = QPushButton("I")
+        self.italic_btn.setAccessibleName("Italic")
+        self.italic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.italic_btn.setFixedSize(32, 32)
         self.italic_btn.setCheckable(True)
         self.italic_btn.setStyleSheet("font-style: italic;")
