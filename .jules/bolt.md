@@ -1,0 +1,3 @@
+## 2024-10-29 - Connection Pooling for Translator Backends
+**Learning:** `requests.Session` and `openai.OpenAI` should be pooled for performance to avoid establishing new HTTP connections for every API call in loops/batches, but they need lazy instantiation in `__init__` rather than eager instantiation. Eager instantiation of objects containing thread locks (like `requests.Session()`) inside the `__init__` method can lead to multiprocessing pickling errors when `Translator` instances are passed to background worker threads or processes.
+**Action:** Always implement connection pooling using a lazy instantiation pattern (e.g., `_get_session()`) for clients used inside classes that may be passed across process or thread boundaries.

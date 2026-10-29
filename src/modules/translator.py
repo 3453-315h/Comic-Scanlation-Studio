@@ -325,6 +325,10 @@ class Translator:
         self._opus_model = None
         self._opus_tokenizer = None
         
+        # Lazy-loaded clients for connection pooling
+        self._session = None
+        self._openai_client = None
+
         if api == "deepl":
             from dotenv import load_dotenv
             import os
@@ -467,6 +471,12 @@ class Translator:
             logger.error(f"Google Translate error: {e}")
             raise TranslationBackendError(f"Google Translate error: {e}") from e
     
+    def _get_session(self):
+        """Lazily initialize requests session for connection pooling"""
+        if self._session is None:
+            self._session = requests.Session()
+        return self._session
+
     def _deepl_translate(self, text: str) -> str:
         """Use DeepL API"""
         if not self.api_key:
@@ -480,7 +490,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params, timeout=30)
+            response = self._get_session().post(url, data=params, timeout=30)
             response.raise_for_status()
             data = response.json()
             translations = data.get("translations", [])
@@ -491,14 +501,20 @@ class Translator:
             logger.error(f"DeepL error: {e}")
             raise TranslationBackendError(f"DeepL error: {e}") from e
     
+    def _get_openai_client(self):
+        """Lazily initialize OpenAI client to reuse connection pool"""
+        if self._openai_client is None:
+            from openai import OpenAI
+            self._openai_client = OpenAI(api_key=self.api_key)
+        return self._openai_client
+
     def _openai_translate(self, text: str, context: Optional[str] = None) -> str:
         """Use OpenAI GPT for contextual translation"""
         if not self.api_key:
             raise MissingCredentialsError("OpenAI API key is missing.")
         
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=self.api_key)
+            client = self._get_openai_client()
             
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
 Maintain the tone and style appropriate for comics.
