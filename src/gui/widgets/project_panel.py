@@ -2,7 +2,7 @@
 # Add at the top with other imports
 from typing import Optional
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QListWidget, QLabel
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 from pathlib import Path
 
 from ...core.project import Project, Page
@@ -32,10 +32,12 @@ class ProjectPanel(QWidget):
         btn_layout = QVBoxLayout()
         
         self.add_pages_btn = QPushButton("Add Pages")
+        self.add_pages_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_pages_btn.clicked.connect(self.on_add_pages)
         btn_layout.addWidget(self.add_pages_btn)
         
         self.sync_btn = QPushButton("Sync to Cloud")
+        self.sync_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.sync_btn.clicked.connect(self.on_sync)
         btn_layout.addWidget(self.sync_btn)
         
