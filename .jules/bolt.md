@@ -1,0 +1,3 @@
+## 2024-10-30 - Lazily initialize connection pools in Translator
+**Learning:** Initializing HTTP connection pools (`requests.Session` or `OpenAI` client) directly in `Translator.__init__` can cause multiprocessing pickling errors when the instance is passed to worker threads, as they contain thread locks. Caching synchronous HTTP clients is essential for performance (avoiding repeated TLS handshakes), but must be done safely.
+**Action:** Lazily instantiate connection pools (like `requests.Session` or `OpenAI`) inside the translation methods (e.g., `_deepl_translate`, `_openai_translate`) rather than in `__init__`, assigning them to instance variables (e.g., `self._session = ...`) for reuse in subsequent calls within the same thread.
