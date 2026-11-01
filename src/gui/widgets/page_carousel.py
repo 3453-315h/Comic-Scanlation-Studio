@@ -69,6 +69,7 @@ class PageThumbnail(QWidget):
         self.remove_btn = QPushButton("✕", self)
         self.remove_btn.setFixedSize(20, 20)
         self.remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.remove_btn.setAccessibleName("Remove page")
         # self.remove_btn.setToolTip("Delete Page") # Remove tooltip to avoid "popup" confusion
         self.remove_btn.setStyleSheet("""
             QPushButton {
@@ -206,6 +207,8 @@ class PageCarousel(QWidget):
         
         self.upload_btn = QPushButton("📁 Upload Images")
         self.upload_btn.setObjectName("PrimaryButton")
+        self.upload_btn.setAccessibleName("Upload Images")
+        self.upload_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.upload_btn.setMinimumWidth(140)
         self.upload_btn.setMinimumHeight(48)
         self.upload_btn.clicked.connect(self.upload_clicked.emit)
