@@ -318,6 +318,9 @@ class Translator:
         self.source_lang = source_lang
         self.target_lang = target_lang
         self.api_key = None
+        self._session = None
+        self._openai_client = None
+        self._google_client = None
         
         # Lazy-loaded offline models
         self._nllb_model = None
@@ -354,6 +357,12 @@ class Translator:
         
         logger.info(f"Translator initialized with backend: {api}")
         
+    @property
+    def session(self) -> requests.Session:
+        if self._session is None:
+            self._session = requests.Session()
+        return self._session
+
     def _load_cache(self) -> dict:
         """Compatibility helper"""
         return self.cache._reload_from_disk()
@@ -441,8 +450,10 @@ class Translator:
     def _google_translate(self, text: str) -> str:
         """Use googletrans library"""
         try:
-            from googletrans import Translator as GTranslator
-            translator = GTranslator()
+            if self._google_client is None:
+                from googletrans import Translator as GTranslator
+                self._google_client = GTranslator()
+            translator = self._google_client
             result = translator.translate(text, src='auto', dest=self.target_lang)
             
             # Handle async result (newer googletrans versions)
@@ -480,7 +491,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params, timeout=30)
+            response = self.session.post(url, data=params, timeout=30)
             response.raise_for_status()
             data = response.json()
             translations = data.get("translations", [])
@@ -497,8 +508,10 @@ class Translator:
             raise MissingCredentialsError("OpenAI API key is missing.")
         
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=self.api_key)
+            if self._openai_client is None:
+                from openai import OpenAI
+                self._openai_client = OpenAI(api_key=self.api_key)
+            client = self._openai_client
             
             prompt = f"""Translate this comic text from {self.source_lang} to {self.target_lang}.
 Maintain the tone and style appropriate for comics.
