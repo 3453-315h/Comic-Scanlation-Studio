@@ -77,12 +77,14 @@ class TopBar(QWidget):
         self.zoom_out_btn = QPushButton("➖")
         self.zoom_out_btn.setObjectName("TopBarButton")
         self.zoom_out_btn.setToolTip("Zoom Out")
+        self.zoom_out_btn.setAccessibleName("Zoom Out")
         self.zoom_out_btn.clicked.connect(self.zoom_out_clicked.emit)
         layout.addWidget(self.zoom_out_btn)
 
         self.zoom_in_btn = QPushButton("➕")
         self.zoom_in_btn.setObjectName("TopBarButton")
         self.zoom_in_btn.setToolTip("Zoom In")
+        self.zoom_in_btn.setAccessibleName("Zoom In")
         self.zoom_in_btn.clicked.connect(self.zoom_in_clicked.emit)
         layout.addWidget(self.zoom_in_btn)
         
@@ -102,6 +104,7 @@ class TopBar(QWidget):
         self.settings_btn = QPushButton("⚙️")
         self.settings_btn.setObjectName("TopBarButton")
         self.settings_btn.setToolTip("Settings")
+        self.settings_btn.setAccessibleName("Settings")
         self.settings_btn.clicked.connect(self.settings_clicked.emit)
         layout.addWidget(self.settings_btn)
     
