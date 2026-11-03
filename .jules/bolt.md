@@ -1,0 +1,3 @@
+## 2024-05-15 - Missing Connection Pooling in Translator
+**Learning:** Making repeated API calls (e.g., DeepL translation) without connection pooling (using `requests.post()` directly instead of a `requests.Session()`) incurs the overhead of re-establishing a TCP connection and TLS handshake for every call. For bulk translation jobs where many translations happen sequentially or concurrently, this overhead is a significant bottleneck.
+**Action:** Always instantiate HTTP clients (e.g. `requests.Session()` or `OpenAI()`) at the class instance level (with lazy initialization if necessary for thread safety / pickling constraints) to reuse TCP/TLS connections across multiple API requests.
