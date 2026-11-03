@@ -132,6 +132,7 @@ class EditorPanel(QWidget):
         
         # Process All Button
         self.process_all_btn = QPushButton("▶️  Process All Stages")
+        self.process_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.process_all_btn.setObjectName("PrimaryButton")
         self.process_all_btn.setMinimumHeight(48)
         self.process_all_btn.clicked.connect(self.process_all_clicked.emit)
