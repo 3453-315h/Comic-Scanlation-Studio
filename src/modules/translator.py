@@ -318,6 +318,7 @@ class Translator:
         self.source_lang = source_lang
         self.target_lang = target_lang
         self.api_key = None
+        self._session = None
         
         # Lazy-loaded offline models
         self._nllb_model = None
@@ -471,6 +472,9 @@ class Translator:
         """Use DeepL API"""
         if not self.api_key:
             raise MissingCredentialsError("DeepL API key is missing.")
+
+        if self._session is None:
+            self._session = requests.Session()
         
         try:
             url = "https://api-free.deepl.com/v2/translate"
@@ -480,7 +484,7 @@ class Translator:
                 "source_lang": self.source_lang.upper(),
                 "target_lang": self.target_lang.upper()
             }
-            response = requests.post(url, data=params, timeout=30)
+            response = self._session.post(url, data=params, timeout=30)
             response.raise_for_status()
             data = response.json()
             translations = data.get("translations", [])
