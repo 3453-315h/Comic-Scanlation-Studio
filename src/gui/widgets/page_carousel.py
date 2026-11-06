@@ -70,6 +70,7 @@ class PageThumbnail(QWidget):
         self.remove_btn.setFixedSize(20, 20)
         self.remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         # self.remove_btn.setToolTip("Delete Page") # Remove tooltip to avoid "popup" confusion
+        self.remove_btn.setAccessibleName("Delete Page")
         self.remove_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(200, 0, 0, 0.8);
