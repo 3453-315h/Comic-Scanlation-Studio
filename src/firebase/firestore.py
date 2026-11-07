@@ -20,28 +20,35 @@ class FirestoreManager:
         self.db = firestore.Client()
         logger.info("Firestore client initialized")
     
-    def save_project(self, user_id: str, project_data: Dict[str, Any]) -> bool:
+    def save_project(self, user_id: str, project_data: Dict[str, Any], batch: Optional[firestore.WriteBatch] = None) -> bool:
         """Save project to Firestore"""
         try:
             doc_ref = self.db.collection("users").document(user_id).collection("projects").document(project_data["id"])
-            doc_ref.set({
+            data = {
                 "name": project_data["name"],
                 "created_at": project_data["created_at"],
                 "settings": project_data["settings"],
                 "page_count": len(project_data.get("pages", {})),
                 "synced_at": firestore.SERVER_TIMESTAMP
-            })
+            }
+            if batch:
+                batch.set(doc_ref, data)
+            else:
+                doc_ref.set(data)
             logger.info(f"Saved project {project_data['id']} for user {user_id}")
             return True
         except Exception as e:
             logger.error(f"Failed to save project to Firestore: {e}")
             return False
     
-    def save_page(self, user_id: str, project_id: str, page_id: str, page_data: Dict) -> bool:
+    def save_page(self, user_id: str, project_id: str, page_id: str, page_data: Dict, batch: Optional[firestore.WriteBatch] = None) -> bool:
         """Save page data to Firestore"""
         try:
             doc_ref = self.db.collection("users").document(user_id).collection("projects").document(project_id).collection("pages").document(page_id)
-            doc_ref.set(page_data)
+            if batch:
+                batch.set(doc_ref, page_data)
+            else:
+                doc_ref.set(page_data)
             logger.debug(f"Saved page {page_id} for project {project_id}")
             return True
         except Exception as e:
@@ -63,12 +70,28 @@ class FirestoreManager:
     def sync_project(self, user_id: str, project_data: Dict) -> bool:
         """Full project sync (including pages)"""
         try:
+            # Use batched writes to optimize performance (avoids N+1 query bottlenecks)
+            # Firestore limits batches to 500 operations
+            batch = self.db.batch()
+            count = 0
+
             # Save project metadata
-            self.save_project(user_id, project_data)
+            self.save_project(user_id, project_data, batch)
+            count += 1
             
             # Save each page
             for page_id, page_data in project_data.get("pages", {}).items():
-                self.save_page(user_id, project_data["id"], page_id, page_data)
+                if count >= 500:
+                    batch.commit()
+                    batch = self.db.batch()
+                    count = 0
+
+                self.save_page(user_id, project_data["id"], page_id, page_data, batch)
+                count += 1
+
+            # Commit any remaining operations
+            if count > 0:
+                batch.commit()
             
             logger.info(f"Full sync completed for project {project_data['id']}")
             return True
