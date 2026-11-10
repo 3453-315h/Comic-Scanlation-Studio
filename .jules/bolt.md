@@ -1,0 +1,3 @@
+## 2024-05-24 - HTTP Connection Pooling in Translator
+**Learning:** Reconstructing connection pools (`requests.post()` directly, or instantiating `OpenAI()` inside methods) for every API translation adds substantial TCP/TLS handshake latency. The `Translator` instance can be passed across threads, so eagerly instantiating `requests.Session` in `__init__` can cause multiprocessing pickling errors.
+**Action:** Use lazy initialization for synchronous clients (`requests.Session`, `openai.OpenAI`) inside the translation methods so that connection pools are reused across calls within the same thread.

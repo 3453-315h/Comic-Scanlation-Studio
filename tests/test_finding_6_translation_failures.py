@@ -32,7 +32,16 @@ def test_network_error_raises_backend_error():
     """Network connection failure must raise TranslationBackendError, not return original text."""
     translator = Translator(backend="google")
     
-    with patch("requests.get", side_effect=Exception("Connection refused")):
+    with patch.object(Translator, '_google_translate', side_effect=TranslationBackendError("Connection refused")):
+        with pytest.raises(TranslationBackendError):
+            translator.translate("テスト")
+
+def test_deepl_network_error_raises_backend_error():
+    """DeepL network connection failure must raise TranslationBackendError."""
+    translator = Translator(backend="deepl")
+    translator.api_key = "dummy_key"
+
+    with patch("requests.Session.post", side_effect=Exception("Connection refused")):
         with pytest.raises(TranslationBackendError):
             translator.translate("テスト")
 
