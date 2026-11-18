@@ -30,11 +30,16 @@ def test_unsupported_backend_raises_loudly():
 
 def test_network_error_raises_backend_error():
     """Network connection failure must raise TranslationBackendError, not return original text."""
-    translator = Translator(backend="google")
-    
+    translator_google = Translator(backend="google")
     with patch("requests.get", side_effect=Exception("Connection refused")):
         with pytest.raises(TranslationBackendError):
-            translator.translate("テスト")
+            translator_google.translate("テスト")
+
+    translator_deepl = Translator(backend="deepl")
+    translator_deepl.api_key = "dummy_key"
+    with patch("requests.Session.post", side_effect=Exception("Connection refused")):
+        with pytest.raises(TranslationBackendError):
+            translator_deepl.translate("テスト")
 
 def test_identical_valid_translation_is_preserved_and_cached(tmp_path):
     """An authentic identical translation (e.g. proper noun 'Tokyo' -> 'Tokyo') is valid and marked translated."""
